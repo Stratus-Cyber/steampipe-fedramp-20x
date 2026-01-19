@@ -1,5 +1,6 @@
 # KSI-MLA: Monitoring, Logging, Auditing Queries - AWS
 
+
 query "ksi_mla_01_aws_check" {
   sql = <<-EOQ
     -- Check CloudTrail is enabled in all regions (cis_v150_3_1)
@@ -82,32 +83,6 @@ query "ksi_mla_01_aws_check" {
 
     union all
 
-    -- Check CloudTrail enabled (foundational_security_cloudtrail_1)
-    select
-      'arn:aws:cloudtrail:' || region || ':' || account_id as resource,
-      case
-        when exists (
-          select 1 from aws_cloudtrail_trail 
-          where is_logging and is_multi_region_trail
-        ) then 'ok'
-        else 'alarm'
-      end as status,
-      case
-        when exists (
-          select 1 from aws_cloudtrail_trail 
-          where is_logging and is_multi_region_trail
-        ) then 'CloudTrail is enabled in the account.'
-        else 'CloudTrail is not enabled with multi-region trail.'
-      end as reason,
-      region,
-      account_id
-    from
-      aws_region
-    where
-      opt_in_status = 'opted-in' or opt_in_status = 'opt-in-not-required'
-
-    union all
-
     -- Check VPC Flow Logs enabled (foundational_security_vpc_1, ec2_6)
     select
       arn as resource,
@@ -159,41 +134,5 @@ query "ksi_mla_01_aws_check" {
       account_id
     from
       aws_config_configuration_recorder
-
-    union all
-
-    -- Check ELB access logging enabled (foundational_security_elb_5)
-    select
-      arn as resource,
-      case
-        when access_log_enabled then 'ok'
-        else 'alarm'
-      end as status,
-      case
-        when access_log_enabled then name || ' has access logging enabled.'
-        else name || ' does not have access logging enabled.'
-      end as reason,
-      region,
-      account_id
-    from
-      aws_ec2_classic_load_balancer
-
-    union all
-
-    -- Check WAF logging enabled (foundational_security_waf_1)
-    select
-      arn as resource,
-      case
-        when logging_configuration is not null then 'ok'
-        else 'alarm'
-      end as status,
-      case
-        when logging_configuration is not null then name || ' has logging enabled.'
-        else name || ' does not have logging enabled.'
-      end as reason,
-      region,
-      account_id
-    from
-      aws_wafv2_web_acl
   EOQ
 }

@@ -79,17 +79,18 @@ query "ksi_svc_01_aws_check" {
     union all
 
     -- Check Auto Scaling launch templates (foundational_security_autoscaling_3)
+    -- Note: Using 'name' instead of 'auto_scaling_group_name' for Steampipe compatibility
     select
       autoscaling_group_arn as resource,
       case
         when launch_template_id is not null then 'ok'
-        when mixed_instances_policy -> 'LaunchTemplate' -> 'LaunchTemplateSpecification' -> 'LaunchTemplateId' is not null then 'ok'
+        when mixed_instances_policy_launch_template_id is not null then 'ok'
         else 'alarm'
       end as status,
       case
-        when launch_template_id is not null then auto_scaling_group_name || ' uses a launch template.'
-        when mixed_instances_policy -> 'LaunchTemplate' -> 'LaunchTemplateSpecification' -> 'LaunchTemplateId' is not null then auto_scaling_group_name || ' uses a launch template via mixed instances policy.'
-        else auto_scaling_group_name || ' does not use a launch template.'
+        when launch_template_id is not null then name || ' uses a launch template.'
+        when mixed_instances_policy_launch_template_id is not null then name || ' uses a launch template via mixed instances policy.'
+        else name || ' does not use a launch template.'
       end as reason,
       region,
       account_id

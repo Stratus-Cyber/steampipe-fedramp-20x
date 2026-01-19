@@ -1,12 +1,5 @@
-# AWS FedRAMP 20x Compliance Dashboard
-
 dashboard "fedramp_20x_overview" {
   title = "FedRAMP 20x Overview"
-
-  tags = {
-    type      = "AWS"
-    framework = "FedRAMP 20x"
-  }
 
   container {
     card {

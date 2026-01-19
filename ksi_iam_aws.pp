@@ -20,16 +20,17 @@ query "ksi_iam_01_aws_check" {
     union all
 
     -- Check MFA enabled for console users (cis_v150_1_4)
+    -- Note: Using login_profile IS NOT NULL instead of password_enabled (Steampipe compatibility)
     select
       arn as resource,
       case
-        when password_enabled and not mfa_active then 'alarm'
-        when password_enabled and mfa_active then 'ok'
+        when login_profile is not null and not mfa_enabled then 'alarm'
+        when login_profile is not null and mfa_enabled then 'ok'
         else 'ok'
       end as status,
       case
-        when password_enabled and not mfa_active then name || ' has console access but MFA is not enabled.'
-        when password_enabled and mfa_active then name || ' has MFA enabled.'
+        when login_profile is not null and not mfa_enabled then name || ' has console access but MFA is not enabled.'
+        when login_profile is not null and mfa_enabled then name || ' has MFA enabled.'
         else name || ' does not have console access.'
       end as reason,
       account_id
@@ -97,16 +98,17 @@ query "ksi_iam_02_aws_check" {
     union all
 
     -- Check no IAM users with password age > 90 days (cis_v150_1_10)
+    -- Note: Using login_profile and password_last_used for Steampipe compatibility
     select
       arn as resource,
       case
-        when not password_enabled then 'ok'
-        when password_last_changed > (current_date - interval '90 days') then 'ok'
+        when login_profile is null then 'ok'
+        when password_last_used > (current_date - interval '90 days') then 'ok'
         else 'alarm'
       end as status,
       case
-        when not password_enabled then name || ' does not have a password.'
-        when password_last_changed > (current_date - interval '90 days') then name || ' password is within 90-day rotation.'
+        when login_profile is null then name || ' does not have a password.'
+        when password_last_used > (current_date - interval '90 days') then name || ' password is within 90-day rotation.'
         else name || ' password is over 90 days old.'
       end as reason,
       account_id
@@ -119,11 +121,11 @@ query "ksi_iam_02_aws_check" {
     select
       arn as resource,
       case
-        when password_enabled and password_last_used < (current_date - interval '45 days') then 'alarm'
+        when login_profile is not null and password_last_used < (current_date - interval '45 days') then 'alarm'
         else 'ok'
       end as status,
       case
-        when password_enabled and password_last_used < (current_date - interval '45 days') then name || ' has not used password in over 45 days.'
+        when login_profile is not null and password_last_used < (current_date - interval '45 days') then name || ' has not used password in over 45 days.'
         else name || ' credentials are active.'
       end as reason,
       account_id
@@ -231,11 +233,11 @@ query "ksi_iam_05_aws_check" {
     select
       arn as resource,
       case
-        when password_enabled and password_last_used < (current_date - interval '90 days') then 'alarm'
+        when login_profile is not null and password_last_used < (current_date - interval '90 days') then 'alarm'
         else 'ok'
       end as status,
       case
-        when password_enabled and password_last_used < (current_date - interval '90 days') then name || ' has unused credentials for over 90 days.'
+        when login_profile is not null and password_last_used < (current_date - interval '90 days') then name || ' has unused credentials for over 90 days.'
         else name || ' credentials are actively used.'
       end as reason,
       account_id

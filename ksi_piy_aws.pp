@@ -1,5 +1,6 @@
 # KSI-PIY: Policy and Inventory Queries - AWS
 
+
 query "ksi_piy_01_aws_check" {
   sql = <<-EOQ
     -- Check RDS cluster tag inventory (foundational_security_rds_16)

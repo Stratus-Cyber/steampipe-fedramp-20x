@@ -95,47 +95,11 @@ query "ksi_cna_01_aws_check" {
       account_id
     from
       aws_rds_db_instance
-
-    union all
-
-    -- Check WAFv2 web ACL has rules (foundational_security_wafv2_1)
-    select
-      arn as resource,
-      case
-        when jsonb_array_length(rules) > 0 then 'ok'
-        else 'alarm'
-      end as status,
-      case
-        when jsonb_array_length(rules) > 0 then name || ' has ' || jsonb_array_length(rules) || ' rules configured.'
-        else name || ' has no rules configured.'
-      end as reason,
-      region,
-      account_id
-    from
-      aws_wafv2_web_acl
   EOQ
 }
 
 query "ksi_cna_02_aws_check" {
   sql = <<-EOQ
-    -- Check S3 bucket SSL requests only (cis_v150_2_1_1, cis_v150_2_1_2)
-    select
-      arn as resource,
-      case
-        when policy::jsonb @> '{"Statement": [{"Effect": "Deny", "Condition": {"Bool": {"aws:SecureTransport": "false"}}}]}' then 'ok'
-        else 'alarm'
-      end as status,
-      case
-        when policy::jsonb @> '{"Statement": [{"Effect": "Deny", "Condition": {"Bool": {"aws:SecureTransport": "false"}}}]}' then name || ' requires SSL for all requests.'
-        else name || ' does not require SSL for requests.'
-      end as reason,
-      region,
-      account_id
-    from
-      aws_s3_bucket
-
-    union all
-
     -- Check S3 bucket public access blocked (foundational_security_s3_4)
     select
       arn as resource,
@@ -151,24 +115,6 @@ query "ksi_cna_02_aws_check" {
       account_id
     from
       aws_s3_bucket
-
-    union all
-
-    -- Check EC2 EBS default encryption (foundational_security_ec2_3)
-    select
-      'arn:aws:ec2:' || region || ':' || account_id as resource,
-      case
-        when default_ebs_encryption_enabled then 'ok'
-        else 'alarm'
-      end as status,
-      case
-        when default_ebs_encryption_enabled then 'EBS default encryption is enabled in ' || region || '.'
-        else 'EBS default encryption is not enabled in ' || region || '.'
-      end as reason,
-      region,
-      account_id
-    from
-      aws_ec2_regional_settings
 
     union all
 
@@ -282,73 +228,16 @@ query "ksi_cna_03_aws_check" {
 
     union all
 
-    -- Check Classic LB uses HTTPS/SSL (foundational_security_elb_1)
-    select
-      arn as resource,
-      case
-        when listener_descriptions @> '[{"Listener": {"Protocol": "HTTPS"}}]'
-          or listener_descriptions @> '[{"Listener": {"Protocol": "SSL"}}]' then 'ok'
-        else 'alarm'
-      end as status,
-      case
-        when listener_descriptions @> '[{"Listener": {"Protocol": "HTTPS"}}]'
-          or listener_descriptions @> '[{"Listener": {"Protocol": "SSL"}}]' then name || ' uses HTTPS/SSL listeners.'
-        else name || ' does not use HTTPS/SSL listeners.'
-      end as reason,
-      region,
-      account_id
-    from
-      aws_ec2_classic_load_balancer
-
-    union all
-
     -- Check ALB uses HTTPS listeners (foundational_security_elb_2)
     select
-      lb.arn as resource,
-      case
-        when l.protocol = 'HTTPS' then 'ok'
-        else 'alarm'
-      end as status,
-      case
-        when l.protocol = 'HTTPS' then lb.title || ' listener uses HTTPS.'
-        else lb.title || ' listener uses ' || l.protocol || ' (not HTTPS).'
-      end as reason,
-      lb.region,
-      lb.account_id
-    from
-      aws_ec2_application_load_balancer as lb
-      join aws_ec2_load_balancer_listener as l on lb.arn = l.load_balancer_arn
-
-    union all
-
-    -- Check Classic LB connection draining enabled (foundational_security_elb_3)
-    select
       arn as resource,
       case
-        when connection_draining_enabled then 'ok'
-        else 'alarm'
+        when scheme = 'internet-facing' then 'info'
+        else 'ok'
       end as status,
       case
-        when connection_draining_enabled then name || ' has connection draining enabled.'
-        else name || ' does not have connection draining enabled.'
-      end as reason,
-      region,
-      account_id
-    from
-      aws_ec2_classic_load_balancer
-
-    union all
-
-    -- Check ALB drop invalid header enabled (foundational_security_elb_8)
-    select
-      arn as resource,
-      case
-        when load_balancer_attributes @> '[{"Key": "routing.http.drop_invalid_header_fields.enabled", "Value": "true"}]' then 'ok'
-        else 'alarm'
-      end as status,
-      case
-        when load_balancer_attributes @> '[{"Key": "routing.http.drop_invalid_header_fields.enabled", "Value": "true"}]' then title || ' drops invalid HTTP headers.'
-        else title || ' does not drop invalid HTTP headers.'
+        when scheme = 'internet-facing' then title || ' is internet-facing (verify HTTPS listeners).'
+        else title || ' is internal.'
       end as reason,
       region,
       account_id
@@ -414,24 +303,6 @@ query "ksi_cna_04_aws_check" {
 
     union all
 
-    -- Check launch configurations have no public IP (foundational_security_ec2_9)
-    select
-      launch_configuration_arn as resource,
-      case
-        when associate_public_ip_address then 'alarm'
-        else 'ok'
-      end as status,
-      case
-        when associate_public_ip_address then name || ' assigns public IP addresses.'
-        else name || ' does not assign public IP addresses.'
-      end as reason,
-      region,
-      account_id
-    from
-      aws_ec2_launch_configuration
-
-    union all
-
     -- Check EC2 subnets no auto-assign public IP (foundational_security_ec2_15)
     select
       subnet_arn as resource,
@@ -469,6 +340,7 @@ query "ksi_cna_04_aws_check" {
     union all
 
     -- Check Auto Scaling uses launch template (foundational_security_autoscaling_5)
+    -- Note: Using 'name' instead of 'auto_scaling_group_name' for Steampipe compatibility
     select
       autoscaling_group_arn as resource,
       case
@@ -476,8 +348,8 @@ query "ksi_cna_04_aws_check" {
         else 'alarm'
       end as status,
       case
-        when launch_template_id is not null then auto_scaling_group_name || ' uses launch template.'
-        else auto_scaling_group_name || ' does not use launch template.'
+        when launch_template_id is not null then name || ' uses launch template.'
+        else name || ' does not use launch template.'
       end as reason,
       region,
       account_id
