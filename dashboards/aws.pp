@@ -1,130 +1,121 @@
 # AWS FedRAMP 20x Compliance Dashboard
 
-dashboard "aws_compliance_overview" {
-  title = "AWS Compliance Overview"
+dashboard "fedramp_20x_overview" {
+  title = "FedRAMP 20x Overview"
 
   tags = {
-    type = "AWS"
+    type      = "AWS"
+    framework = "FedRAMP 20x"
   }
 
   container {
     card {
-      title = "IAM Users"
+      title = "Total Controls"
       width = 3
-      query = query.aws_iam_user_count
+      type  = "info"
+      sql   = "select 14 as value"
     }
 
     card {
-      title = "S3 Buckets"
+      title = "Critical Severity"
       width = 3
-      query = query.aws_s3_bucket_count
+      type  = "alert"
+      sql   = "select 2 as value"
     }
 
     card {
-      title = "CloudTrail Trails"
+      title = "High Severity"
       width = 3
-      query = query.aws_cloudtrail_count
+      type  = "alert"
+      sql   = "select 9 as value"
     }
 
     card {
-      title = "Security Groups"
+      title = "Medium Severity"
       width = 3
-      query = query.aws_security_group_count
+      type  = "info"
+      sql   = "select 3 as value"
     }
   }
 
   container {
     chart {
-      title = "IAM Users by MFA Status"
+      title = "Controls by Category"
       width = 6
       type  = "donut"
-      query = query.aws_iam_mfa_status
+      sql   = <<-EOQ
+        select
+          'KSI-IAM (Identity & Access)' as category,
+          4 as count
+        union all
+        select 'KSI-CNA (Cloud Native Architecture)', 4
+        union all
+        select 'KSI-MLA (Monitoring & Logging)', 1
+        union all
+        select 'KSI-INR (Incident Response)', 1
+        union all
+        select 'KSI-PIY (Policy & Inventory)', 1
+        union all
+        select 'KSI-RPL (Recovery Planning)', 1
+        union all
+        select 'KSI-SVC (Service Configuration)', 2
+      EOQ
     }
 
     chart {
-      title = "S3 Buckets by Encryption"
+      title = "Controls by Severity"
       width = 6
-      type  = "donut"
-      query = query.aws_s3_encryption_status
+      type  = "column"
+      sql   = <<-EOQ
+        select
+          severity,
+          count
+        from (
+          select 'Critical' as severity, 2 as count
+          union all
+          select 'High', 9
+          union all
+          select 'Medium', 3
+        ) as severity_data
+        order by
+          case severity
+            when 'Critical' then 1
+            when 'High' then 2
+            when 'Medium' then 3
+          end
+      EOQ
     }
   }
 
   container {
     table {
-      title = "IAM Users"
+      title = "All FedRAMP 20x KSI Controls"
       width = 12
-      query = query.aws_iam_user_list
+      sql   = <<-EOQ
+        select
+          control_id,
+          title,
+          severity,
+          category
+        from (
+          values
+            ('KSI-IAM-01', 'Phishing-Resistant MFA', 'critical', 'Identity & Access Management'),
+            ('KSI-IAM-02', 'Strong Password Policies', 'high', 'Identity & Access Management'),
+            ('KSI-IAM-03', 'Non-User Account Authentication', 'high', 'Identity & Access Management'),
+            ('KSI-IAM-05', 'Least Privilege Access', 'high', 'Identity & Access Management'),
+            ('KSI-CNA-01', 'Network Traffic Limits', 'high', 'Cloud Native Architecture'),
+            ('KSI-CNA-02', 'Minimal Attack Surface', 'high', 'Cloud Native Architecture'),
+            ('KSI-CNA-03', 'Traffic Flow Controls', 'high', 'Cloud Native Architecture'),
+            ('KSI-CNA-04', 'Immutable Infrastructure', 'high', 'Cloud Native Architecture'),
+            ('KSI-MLA-01', 'Centralized Logging (SIEM)', 'critical', 'Monitoring, Logging & Auditing'),
+            ('KSI-INR-01', 'Incident Response Procedures', 'high', 'Incident Response'),
+            ('KSI-PIY-01', 'Real-Time Inventory Generation', 'medium', 'Policy & Inventory'),
+            ('KSI-RPL-01', 'Recovery Time and Point Objectives', 'high', 'Recovery Planning'),
+            ('KSI-SVC-01', 'Security Improvement Evaluation', 'medium', 'Service Configuration'),
+            ('KSI-SVC-06', 'Key and Certificate Management', 'high', 'Service Configuration')
+        ) as controls(control_id, title, severity, category)
+        order by control_id
+      EOQ
     }
   }
-}
-
-# ============================================================================
-# AWS QUERIES
-# ============================================================================
-
-query "aws_iam_user_count" {
-  sql = <<-EOQ
-    select count(*) as value
-    from aws_iam_user
-  EOQ
-}
-
-query "aws_s3_bucket_count" {
-  sql = <<-EOQ
-    select count(*) as value
-    from aws_s3_bucket
-  EOQ
-}
-
-query "aws_cloudtrail_count" {
-  sql = <<-EOQ
-    select count(*) as value
-    from aws_cloudtrail_trail
-  EOQ
-}
-
-query "aws_security_group_count" {
-  sql = <<-EOQ
-    select count(*) as value
-    from aws_vpc_security_group
-  EOQ
-}
-
-query "aws_iam_mfa_status" {
-  sql = <<-EOQ
-    select
-      case
-        when mfa_active then 'MFA Enabled'
-        else 'MFA Disabled'
-      end as status,
-      count(*) as count
-    from aws_iam_user
-    group by mfa_active
-  EOQ
-}
-
-query "aws_s3_encryption_status" {
-  sql = <<-EOQ
-    select
-      case
-        when server_side_encryption_configuration is not null then 'Encrypted'
-        else 'Not Encrypted'
-      end as status,
-      count(*) as count
-    from aws_s3_bucket
-    group by (server_side_encryption_configuration is not null)
-  EOQ
-}
-
-query "aws_iam_user_list" {
-  sql = <<-EOQ
-    select
-      name as "User",
-      user_id as "User ID",
-      case when mfa_active then 'Yes' else 'No' end as "MFA",
-      case when password_enabled then 'Yes' else 'No' end as "Console Access",
-      create_date as "Created"
-    from aws_iam_user
-    order by name
-  EOQ
 }
