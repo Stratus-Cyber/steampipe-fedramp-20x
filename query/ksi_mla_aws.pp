@@ -16,7 +16,6 @@ query "ksi_mla_01_aws_check" {
         when is_logging then name || ' is logging but not multi-region.'
         else name || ' is not logging.'
       end as reason,
-      region,
       account_id
     from
       aws_cloudtrail_trail
@@ -34,7 +33,6 @@ query "ksi_mla_01_aws_check" {
         when log_file_validation_enabled then name || ' has log file validation enabled.'
         else name || ' does not have log file validation enabled.'
       end as reason,
-      region,
       account_id
     from
       aws_cloudtrail_trail
@@ -54,7 +52,6 @@ query "ksi_mla_01_aws_check" {
         when kms_key_id is not null then name || ' logs are encrypted with KMS.'
         else name || ' logs are not encrypted with KMS.'
       end as reason,
-      region,
       account_id
     from
       aws_cloudtrail_trail
@@ -74,7 +71,6 @@ query "ksi_mla_01_aws_check" {
         when log_group_arn is not null then name || ' sends logs to CloudWatch.'
         else name || ' does not send logs to CloudWatch.'
       end as reason,
-      region,
       account_id
     from
       aws_cloudtrail_trail
@@ -85,19 +81,19 @@ query "ksi_mla_01_aws_check" {
 
     -- Check VPC Flow Logs enabled (foundational_security_vpc_1, ec2_6)
     select
-      arn as resource,
+      v.arn as resource,
       case
-        when flow_logs is not null and jsonb_array_length(flow_logs) > 0 then 'ok'
+        when f.flow_log_id is not null then 'ok'
         else 'alarm'
       end as status,
       case
-        when flow_logs is not null and jsonb_array_length(flow_logs) > 0 then vpc_id || ' has flow logs enabled.'
-        else vpc_id || ' does not have flow logs enabled.'
+        when f.flow_log_id is not null then v.vpc_id || ' has flow logs enabled.'
+        else v.vpc_id || ' does not have flow logs enabled.'
       end as reason,
-      region,
-      account_id
+      v.account_id
     from
-      aws_vpc
+      aws_vpc as v
+      left join aws_vpc_flow_log as f on v.vpc_id = f.resource_id
 
     union all
 
@@ -112,7 +108,6 @@ query "ksi_mla_01_aws_check" {
         when enhanced_monitoring_resource_arn is not null then db_instance_identifier || ' has enhanced monitoring enabled.'
         else db_instance_identifier || ' does not have enhanced monitoring enabled.'
       end as reason,
-      region,
       account_id
     from
       aws_rds_db_instance
@@ -123,14 +118,13 @@ query "ksi_mla_01_aws_check" {
     select
       'arn:aws:config:' || region || ':' || account_id as resource,
       case
-        when recording then 'ok'
+        when status_recording then 'ok'
         else 'alarm'
       end as status,
       case
-        when recording then 'AWS Config is recording in ' || region || '.'
+        when status_recording then 'AWS Config is recording in ' || region || '.'
         else 'AWS Config is not recording in ' || region || '.'
       end as reason,
-      region,
       account_id
     from
       aws_config_configuration_recorder

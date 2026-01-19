@@ -15,7 +15,6 @@ query "ksi_rpl_01_aws_check" {
         when backup_retention_period > 0 then db_instance_identifier || ' has only ' || backup_retention_period || ' day backup retention (recommend 7+).'
         else db_instance_identifier || ' has no automated backups enabled.'
       end as reason,
-      region,
       account_id
     from
       aws_rds_db_instance
@@ -33,7 +32,6 @@ query "ksi_rpl_01_aws_check" {
         when multi_az then db_instance_identifier || ' has Multi-AZ enabled for high availability.'
         else db_instance_identifier || ' does not have Multi-AZ enabled.'
       end as reason,
-      region,
       account_id
     from
       aws_rds_db_instance
@@ -51,7 +49,6 @@ query "ksi_rpl_01_aws_check" {
         when deletion_protection then db_instance_identifier || ' has deletion protection enabled.'
         else db_instance_identifier || ' does not have deletion protection.'
       end as reason,
-      region,
       account_id
     from
       aws_rds_db_instance
@@ -69,7 +66,6 @@ query "ksi_rpl_01_aws_check" {
         when snapshot_retention_limit > 0 then replication_group_id || ' has ' || snapshot_retention_limit || ' day snapshot retention.'
         else replication_group_id || ' has no automatic backups configured.'
       end as reason,
-      region,
       account_id
     from
       aws_elasticache_replication_group
@@ -88,7 +84,6 @@ query "ksi_rpl_01_aws_check" {
         when jsonb_array_length(availability_zones) > 1 then name || ' spans ' || jsonb_array_length(availability_zones) || ' availability zones.'
         else name || ' is only in ' || jsonb_array_length(availability_zones) || ' availability zone.'
       end as reason,
-      region,
       account_id
     from
       aws_ec2_autoscaling_group

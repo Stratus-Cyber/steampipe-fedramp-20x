@@ -15,7 +15,6 @@ query "ksi_piy_01_aws_check" {
         when tags is null or tags = '{}' then db_cluster_identifier || ' has no tags for inventory tracking.'
         else db_cluster_identifier || ' is properly tagged for inventory.'
       end as reason,
-      region,
       account_id
     from
       aws_rds_db_cluster
@@ -34,7 +33,6 @@ query "ksi_piy_01_aws_check" {
         when tags is null or tags = '{}' then db_instance_identifier || ' has no tags for inventory tracking.'
         else db_instance_identifier || ' is properly tagged for inventory.'
       end as reason,
-      region,
       account_id
     from
       aws_rds_db_instance

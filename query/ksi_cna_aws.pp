@@ -15,7 +15,6 @@ query "ksi_cna_01_aws_check" {
           and (jsonb_array_length(ip_permissions) > 0 or jsonb_array_length(ip_permissions_egress) > 0) then group_name || ' default security group has rules configured.'
         else group_name || ' security group is properly configured.'
       end as reason,
-      region,
       account_id
     from
       aws_vpc_security_group
@@ -35,7 +34,6 @@ query "ksi_cna_01_aws_check" {
         when ip_permissions @> '[{"IpProtocol": "tcp", "FromPort": 22, "ToPort": 22, "IpRanges": [{"CidrIp": "0.0.0.0/0"}]}]' then group_name || ' allows unrestricted SSH access (0.0.0.0/0).'
         else group_name || ' does not allow unrestricted SSH.'
       end as reason,
-      region,
       account_id
     from
       aws_vpc_security_group
@@ -53,7 +51,6 @@ query "ksi_cna_01_aws_check" {
         when ip_permissions @> '[{"IpProtocol": "tcp", "FromPort": 3389, "ToPort": 3389, "IpRanges": [{"CidrIp": "0.0.0.0/0"}]}]' then group_name || ' allows unrestricted RDP access (0.0.0.0/0).'
         else group_name || ' does not allow unrestricted RDP.'
       end as reason,
-      region,
       account_id
     from
       aws_vpc_security_group
@@ -71,7 +68,6 @@ query "ksi_cna_01_aws_check" {
         when public_ip_address is null then instance_id || ' does not have a public IP.'
         else instance_id || ' has public IP ' || public_ip_address || '.'
       end as reason,
-      region,
       account_id
     from
       aws_ec2_instance
@@ -91,7 +87,6 @@ query "ksi_cna_01_aws_check" {
         when not publicly_accessible then db_instance_identifier || ' is not publicly accessible.'
         else db_instance_identifier || ' is publicly accessible.'
       end as reason,
-      region,
       account_id
     from
       aws_rds_db_instance
@@ -111,7 +106,6 @@ query "ksi_cna_02_aws_check" {
         when block_public_acls and block_public_policy and ignore_public_acls and restrict_public_buckets then name || ' has public access blocked.'
         else name || ' does not have all public access settings blocked.'
       end as reason,
-      region,
       account_id
     from
       aws_s3_bucket
@@ -129,7 +123,6 @@ query "ksi_cna_02_aws_check" {
         when encrypted then volume_id || ' is encrypted.'
         else volume_id || ' is not encrypted.'
       end as reason,
-      region,
       account_id
     from
       aws_ebs_volume
@@ -147,7 +140,6 @@ query "ksi_cna_02_aws_check" {
         when storage_encrypted then db_instance_identifier || ' has storage encryption enabled.'
         else db_instance_identifier || ' does not have storage encryption enabled.'
       end as reason,
-      region,
       account_id
     from
       aws_rds_db_instance
@@ -165,7 +157,6 @@ query "ksi_cna_02_aws_check" {
         when encrypted then db_snapshot_identifier || ' is encrypted.'
         else db_snapshot_identifier || ' is not encrypted.'
       end as reason,
-      region,
       account_id
     from
       aws_rds_db_snapshot
@@ -183,7 +174,6 @@ query "ksi_cna_02_aws_check" {
         when at_rest_encryption_enabled then replication_group_id || ' has encryption at rest enabled.'
         else replication_group_id || ' does not have encryption at rest enabled.'
       end as reason,
-      region,
       account_id
     from
       aws_elasticache_replication_group
@@ -203,7 +193,6 @@ query "ksi_cna_03_aws_check" {
         when versioning_enabled then name || ' has versioning enabled.'
         else name || ' does not have versioning enabled.'
       end as reason,
-      region,
       account_id
     from
       aws_s3_bucket
@@ -221,7 +210,6 @@ query "ksi_cna_03_aws_check" {
         when transit_encryption_enabled then replication_group_id || ' has encryption in transit enabled.'
         else replication_group_id || ' does not have encryption in transit enabled.'
       end as reason,
-      region,
       account_id
     from
       aws_elasticache_replication_group
@@ -239,7 +227,6 @@ query "ksi_cna_03_aws_check" {
         when scheme = 'internet-facing' then title || ' is internet-facing (verify HTTPS listeners).'
         else title || ' is internal.'
       end as reason,
-      region,
       account_id
     from
       aws_ec2_application_load_balancer
@@ -276,7 +263,6 @@ query "ksi_cna_04_aws_check" {
         when bucket_policy_is_public then name || ' has a public bucket policy.'
         else name || ' bucket policy is not public.'
       end as reason,
-      region,
       account_id
     from
       aws_s3_bucket
@@ -294,7 +280,6 @@ query "ksi_cna_04_aws_check" {
         when security_groups @> '[{"GroupName": "default"}]' then instance_id || ' uses default security group.'
         else instance_id || ' does not use default security group.'
       end as reason,
-      region,
       account_id
     from
       aws_ec2_instance
@@ -314,7 +299,6 @@ query "ksi_cna_04_aws_check" {
         when map_public_ip_on_launch then subnet_id || ' auto-assigns public IP addresses.'
         else subnet_id || ' does not auto-assign public IP addresses.'
       end as reason,
-      region,
       account_id
     from
       aws_vpc_subnet
@@ -332,7 +316,6 @@ query "ksi_cna_04_aws_check" {
         when not publicly_accessible then db_instance_identifier || ' is not publicly accessible.'
         else db_instance_identifier || ' is publicly accessible.'
       end as reason,
-      region,
       account_id
     from
       aws_rds_db_instance
@@ -351,7 +334,6 @@ query "ksi_cna_04_aws_check" {
         when launch_template_id is not null then name || ' uses launch template.'
         else name || ' does not use launch template.'
       end as reason,
-      region,
       account_id
     from
       aws_ec2_autoscaling_group

@@ -1,33 +1,38 @@
 dashboard "fedramp_20x_overview" {
   title = "FedRAMP 20x Overview"
 
+  tags = {
+    type      = "AWS"
+    framework = "FedRAMP 20x"
+  }
+
   container {
     card {
       title = "Total Controls"
       width = 3
       type  = "info"
-      sql   = "select 14 as value"
+      sql   = "select 14 as total"
     }
 
     card {
       title = "Critical Severity"
       width = 3
       type  = "alert"
-      sql   = "select 2 as value"
+      sql   = "select 2 as total"
     }
 
     card {
       title = "High Severity"
       width = 3
       type  = "alert"
-      sql   = "select 9 as value"
+      sql   = "select 9 as total"
     }
 
     card {
       title = "Medium Severity"
       width = 3
       type  = "info"
-      sql   = "select 3 as value"
+      sql   = "select 3 as total"
     }
   }
 
@@ -59,6 +64,22 @@ dashboard "fedramp_20x_overview" {
       title = "Controls by Severity"
       width = 6
       type  = "column"
+
+      series critical {
+        title = "Critical"
+        color = "red"
+      }
+
+      series high {
+        title = "High"
+        color = "yellow"
+      }
+
+      series medium {
+        title = "Medium"
+        color = "blue"
+      }
+
       sql   = <<-EOQ
         select
           severity,

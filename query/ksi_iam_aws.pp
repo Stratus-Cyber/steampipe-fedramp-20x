@@ -47,10 +47,9 @@ query "ksi_iam_01_aws_check" {
         else 'alarm'
       end as status,
       case
-        when iam_database_authentication_enabled then db_instance_identifier || ' has IAM database authentication enabled.'
-        else db_instance_identifier || ' does not have IAM database authentication enabled.'
+        when iam_database_authentication_enabled then title || ' has IAM database authentication enabled.'
+        else title || ' does not have IAM database authentication enabled.'
       end as reason,
-      region,
       account_id
     from
       aws_rds_db_instance
@@ -142,10 +141,9 @@ query "ksi_iam_02_aws_check" {
         else 'alarm'
       end as status,
       case
-        when auth_token_enabled then replication_group_id || ' has Redis AUTH enabled.'
-        else replication_group_id || ' does not have Redis AUTH enabled.'
+        when auth_token_enabled then title || ' has Redis AUTH enabled.'
+        else title || ' does not have Redis AUTH enabled.'
       end as reason,
-      region,
       account_id
     from
       aws_elasticache_replication_group
@@ -199,10 +197,9 @@ query "ksi_iam_03_aws_check" {
         else 'alarm'
       end as status,
       case
-        when master_user_name not in ('admin', 'postgres', 'root', 'master') then db_instance_identifier || ' uses non-default master username.'
-        else db_instance_identifier || ' uses default master username: ' || master_user_name || '.'
+        when master_user_name not in ('admin', 'postgres', 'root', 'master') then title || ' uses non-default master username.'
+        else title || ' uses default master username: ' || master_user_name || '.'
       end as reason,
-      region,
       account_id
     from
       aws_rds_db_instance
@@ -217,10 +214,9 @@ query "ksi_iam_03_aws_check" {
         else 'alarm'
       end as status,
       case
-        when iam_database_authentication_enabled then db_instance_identifier || ' has IAM database authentication enabled.'
-        else db_instance_identifier || ' does not have IAM database authentication enabled.'
+        when iam_database_authentication_enabled then title || ' has IAM database authentication enabled.'
+        else title || ' does not have IAM database authentication enabled.'
       end as reason,
-      region,
       account_id
     from
       aws_rds_db_instance

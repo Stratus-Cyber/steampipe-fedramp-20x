@@ -13,7 +13,6 @@ query "ksi_svc_01_aws_check" {
         when metadata_options ->> 'HttpTokens' = 'required' then instance_id || ' requires IMDSv2.'
         else instance_id || ' does not require IMDSv2 (allows IMDSv1).'
       end as reason,
-      region,
       account_id
     from
       aws_ec2_instance
@@ -33,7 +32,6 @@ query "ksi_svc_01_aws_check" {
         when jsonb_array_length(network_interfaces) <= 1 then instance_id || ' has ' || jsonb_array_length(network_interfaces) || ' network interface.'
         else instance_id || ' has ' || jsonb_array_length(network_interfaces) || ' network interfaces (review if needed).'
       end as reason,
-      region,
       account_id
     from
       aws_ec2_instance
@@ -53,7 +51,6 @@ query "ksi_svc_01_aws_check" {
         when auto_minor_version_upgrade then db_instance_identifier || ' has automatic minor version upgrade enabled.'
         else db_instance_identifier || ' does not have automatic minor version upgrade enabled.'
       end as reason,
-      region,
       account_id
     from
       aws_rds_db_instance
@@ -71,7 +68,6 @@ query "ksi_svc_01_aws_check" {
         when auto_minor_version_upgrade then cache_cluster_id || ' has automatic minor version upgrade enabled.'
         else cache_cluster_id || ' does not have automatic minor version upgrade enabled.'
       end as reason,
-      region,
       account_id
     from
       aws_elasticache_cluster
@@ -92,7 +88,6 @@ query "ksi_svc_01_aws_check" {
         when mixed_instances_policy_launch_template_id is not null then name || ' uses a launch template via mixed instances policy.'
         else name || ' does not use a launch template.'
       end as reason,
-      region,
       account_id
     from
       aws_ec2_autoscaling_group
@@ -112,7 +107,6 @@ query "ksi_svc_01_aws_check" {
           or load_balancer_attributes @> '[{"Key": "routing.http.desync_mitigation_mode", "Value": "strictest"}]' then title || ' has desync mitigation enabled.'
         else title || ' does not have defensive or strictest desync mitigation mode.'
       end as reason,
-      region,
       account_id
     from
       aws_ec2_application_load_balancer
