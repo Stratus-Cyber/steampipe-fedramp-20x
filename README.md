@@ -1,4 +1,4 @@
-# FedRAMP 20x Dashboards
+# FedRAMP 20x
 
 A simple Powerpipe mod for visualizing Steampipe data.
 
