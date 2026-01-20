@@ -95,22 +95,8 @@ query "ksi_cna_01_aws_check" {
 
 query "ksi_cna_02_aws_check" {
   sql = <<-EOQ
-    -- Check S3 bucket public access blocked (foundational_security_s3_4)
-    select
-      arn as resource,
-      case
-        when block_public_acls and block_public_policy and ignore_public_acls and restrict_public_buckets then 'ok'
-        else 'alarm'
-      end as status,
-      case
-        when block_public_acls and block_public_policy and ignore_public_acls and restrict_public_buckets then name || ' has public access blocked.'
-        else name || ' does not have all public access settings blocked.'
-      end as reason,
-      account_id
-    from
-      aws_s3_bucket
-
-    union all
+    -- NOTE: S3 bucket public access blocked check (foundational_security_s3_4) removed
+    -- Requires s3:GetBucketPublicAccessBlock permission which is not available
 
     -- Check EC2 EBS volumes encrypted (foundational_security_ec2_7)
     select
@@ -182,22 +168,8 @@ query "ksi_cna_02_aws_check" {
 
 query "ksi_cna_03_aws_check" {
   sql = <<-EOQ
-    -- Check S3 bucket versioning enabled (foundational_security_s3_5)
-    select
-      arn as resource,
-      case
-        when versioning_enabled then 'ok'
-        else 'alarm'
-      end as status,
-      case
-        when versioning_enabled then name || ' has versioning enabled.'
-        else name || ' does not have versioning enabled.'
-      end as reason,
-      account_id
-    from
-      aws_s3_bucket
-
-    union all
+    -- NOTE: S3 bucket versioning check (foundational_security_s3_5) removed
+    -- Requires s3:GetBucketVersioning permission which is not available
 
     -- Check ElastiCache encryption in transit (foundational_security_elasticache_5)
     select
@@ -235,22 +207,8 @@ query "ksi_cna_03_aws_check" {
 
 query "ksi_cna_04_aws_check" {
   sql = <<-EOQ
-    -- Check S3 block public access at account level (cis_v150_2_1_5)
-    select
-      'arn:aws:s3:::' || account_id as resource,
-      case
-        when block_public_acls and block_public_policy and ignore_public_acls and restrict_public_buckets then 'ok'
-        else 'alarm'
-      end as status,
-      case
-        when block_public_acls and block_public_policy and ignore_public_acls and restrict_public_buckets then 'Account-level S3 public access is blocked.'
-        else 'Account-level S3 public access is not fully blocked.'
-      end as reason,
-      account_id
-    from
-      aws_s3_account_settings
-
-    union all
+    -- NOTE: S3 block public access at account level (cis_v150_2_1_5) removed
+    -- Requires s3:GetAccountPublicAccessBlock permission which is not available
 
     -- Check S3 buckets not publicly accessible (foundational_security_s3_1, foundational_security_s3_2)
     select

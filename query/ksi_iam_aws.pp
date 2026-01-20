@@ -294,23 +294,7 @@ query "ksi_iam_05_aws_check" {
     from
       aws_iam_user
 
-    union all
-
-    -- Check no overly permissive policies (foundational_security_iam_22)
-    select
-      arn as resource,
-      case
-        when policy_std -> 'Statement' @> '[{"Effect": "Allow", "Action": "*", "Resource": "*"}]' then 'alarm'
-        else 'ok'
-      end as status,
-      case
-        when policy_std -> 'Statement' @> '[{"Effect": "Allow", "Action": "*", "Resource": "*"}]' then name || ' has overly permissive policy (Allow * on *).'
-        else name || ' does not have overly permissive policy.'
-      end as reason,
-      account_id
-    from
-      aws_iam_policy
-    where
-      is_aws_managed = false
+    -- NOTE: Overly permissive policy check (foundational_security_iam_22) removed
+    -- Requires iam:GetPolicyVersion permission which is not available
   EOQ
 }
