@@ -258,3 +258,108 @@ query "ksi_iam_05_azure_check" {
       account_enabled = true
   EOQ
 }
+
+query "ksi_iam_06_azure_check" {
+  sql = <<-EOQ
+    -- KSI-IAM-06: Suspicious Activity Response
+    -- Detect and respond to suspicious authentication activity
+
+    -- Check Microsoft Defender for Cloud is enabled for identity protection
+    select
+      id as resource,
+      case
+        when pricing_tier = 'Standard' then 'ok'
+        else 'alarm'
+      end as status,
+      case
+        when pricing_tier = 'Standard'
+          then 'Microsoft Defender for ' || name || ' is enabled (detects suspicious activity).'
+        else 'Microsoft Defender for ' || name || ' is NOT enabled.'
+      end as reason,
+      subscription_id
+    from
+      all_azure.azure_security_center_subscription_pricing
+    where
+      name in ('KeyVaults', 'Arm', 'OpenSourceRelationalDatabases')
+
+    union all
+
+    -- Check security alerts are configured
+    select
+      id as resource,
+      case
+        when email_addresses is not null and jsonb_array_length(email_addresses) > 0 then 'ok'
+        else 'alarm'
+      end as status,
+      case
+        when email_addresses is not null and jsonb_array_length(email_addresses) > 0
+          then 'Security contact emails configured for alerts.'
+        else 'NO security contact emails configured (cannot respond to suspicious activity).'
+      end as reason,
+      subscription_id
+    from
+      all_azure.azure_security_center_contact
+  EOQ
+}
+
+query "ksi_iam_07_azure_check" {
+  sql = <<-EOQ
+    -- KSI-IAM-07: Automated Account Management
+    -- Automate account lifecycle management
+
+    -- Check for stale users not signed in for 90+ days
+    select
+      id as resource,
+      case
+        when account_enabled = false then 'ok'
+        when sign_in_activity is null then 'alarm'
+        when (sign_in_activity->>'lastSignInDateTime')::timestamp < (current_timestamp - interval '90 days') then 'alarm'
+        else 'ok'
+      end as status,
+      case
+        when account_enabled = false
+          then display_name || ' is disabled (appropriate for stale accounts).'
+        when sign_in_activity is null
+          then display_name || ' has NEVER signed in (stale account, should be disabled automatically).'
+        when (sign_in_activity->>'lastSignInDateTime')::timestamp < (current_timestamp - interval '90 days')
+          then display_name || ' has not signed in for ' ||
+            date_part('day', current_timestamp - (sign_in_activity->>'lastSignInDateTime')::timestamp)::int ||
+            ' days (stale account, should be disabled automatically).'
+        else display_name || ' is actively used.'
+      end as reason,
+      tenant_id
+    from
+      azuread.azuread_user
+    where
+      user_type = 'member'
+
+    union all
+
+    -- Check service principal credentials are rotated
+    select
+      id as resource,
+      case
+        when password_credentials is null or jsonb_array_length(password_credentials) = 0 then 'ok'
+        when exists (
+          select 1 from jsonb_array_elements(password_credentials) as cred
+          where (cred->>'endDateTime')::timestamp < (current_timestamp + interval '30 days')
+        ) then 'alarm'
+        else 'ok'
+      end as status,
+      case
+        when password_credentials is null or jsonb_array_length(password_credentials) = 0
+          then display_name || ' uses certificate-based auth (no password rotation needed).'
+        when exists (
+          select 1 from jsonb_array_elements(password_credentials) as cred
+          where (cred->>'endDateTime')::timestamp < (current_timestamp + interval '30 days')
+        )
+          then display_name || ' has credentials expiring soon or expired (rotation should be automated).'
+        else display_name || ' credentials are valid.'
+      end as reason,
+      tenant_id
+    from
+      azuread.azuread_service_principal
+    where
+      account_enabled = true
+  EOQ
+}

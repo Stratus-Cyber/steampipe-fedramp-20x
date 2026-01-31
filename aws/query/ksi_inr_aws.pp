@@ -2,7 +2,11 @@
 
 query "ksi_inr_01_aws_check" {
   sql = <<-EOQ
-    -- Check GuardDuty enabled (foundational_security_guardduty_1)
+    -- KSI-INR-01: Incident Response Procedures
+    -- Maintain effective incident response capabilities
+
+    -- Check GuardDuty enabled for incident detection
+    -- Note: Access may be denied if GuardDuty is not enabled
     select
       'arn:aws:guardduty:' || region || ':' || account_id || ':detector/' || detector_id as resource,
       case
@@ -10,8 +14,10 @@ query "ksi_inr_01_aws_check" {
         else 'alarm'
       end as status,
       case
-        when status = 'ENABLED' then 'GuardDuty is enabled in ' || region || '.'
-        else 'GuardDuty is not enabled in ' || region || '.'
+        when status = 'ENABLED'
+          then 'GuardDuty detector ' || detector_id || ' is enabled (finding_publishing_frequency: ' ||
+            finding_publishing_frequency || ', triggers IR procedures).'
+        else 'GuardDuty detector ' || detector_id || ' is NOT enabled (access may be denied, verify via AWS Console).'
       end as reason,
       account_id
     from
@@ -19,54 +25,19 @@ query "ksi_inr_01_aws_check" {
 
     union all
 
-    -- Check SecurityHub enabled (foundational_security_securityhub_1)
-    select
-      hub_arn as resource,
-      case
-        when hub_arn is not null then 'ok'
-        else 'alarm'
-      end as status,
-      case
-        when hub_arn is not null then 'SecurityHub is enabled in ' || region || '.'
-        else 'SecurityHub is not enabled in ' || region || '.'
-      end as reason,
-      account_id
-    from
-      aws_securityhub_hub
-
-    union all
-
-    -- Check SNS topic for CloudWatch alarms (basic incident notification)
-    select
-      topic_arn as resource,
-      case
-        when subscriptions_confirmed > 0 then 'ok'
-        else 'info'
-      end as status,
-      case
-        when subscriptions_confirmed > 0 then title || ' has ' || subscriptions_confirmed || ' confirmed subscriptions.'
-        else title || ' has no confirmed subscriptions.'
-      end as reason,
-      account_id
-    from
-      aws_sns_topic
-    where
-      topic_arn like '%alarm%' or topic_arn like '%alert%' or topic_arn like '%notification%'
-
-    union all
-
-    -- Check CloudWatch log groups retention (for incident investigation)
+    -- Check CloudWatch log groups have sufficient retention for incident investigation
     select
       arn as resource,
       case
-        when retention_in_days >= 90 then 'ok'
-        when retention_in_days > 0 then 'info'
-        else 'alarm'
+        when retention_in_days is null or retention_in_days < 365 then 'alarm'
+        else 'ok'
       end as status,
       case
-        when retention_in_days >= 90 then name || ' has ' || retention_in_days || ' days retention.'
-        when retention_in_days > 0 then name || ' has only ' || retention_in_days || ' days retention (recommend 90+).'
-        else name || ' has no retention policy set.'
+        when retention_in_days is null
+          then name || ' has NO retention policy set (logs may be deleted, compromising incident investigation).'
+        when retention_in_days < 365
+          then name || ' has only ' || retention_in_days || ' days retention (recommend 365+ days for incident investigation).'
+        else name || ' has ' || retention_in_days || ' days retention (sufficient for incident investigation).'
       end as reason,
       account_id
     from
