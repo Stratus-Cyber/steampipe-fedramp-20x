@@ -49,6 +49,34 @@ query "ksi_cmt_01_azure_check" {
 
 query "ksi_cmt_02_azure_check" {
   sql = <<-EOQ
+    with exempt_1 as (
+      select
+        id as exempt_id,
+        tags->>'${var.exemption_expiry_tag}' as exemption_expiry
+      from
+        azure_compute_virtual_machine_scale_set
+      where
+        tags->>'${var.exemption_tag_key}' is not null
+          and 'KSI-CMT-02' = any(string_to_array(tags->>'${var.exemption_tag_key}', ':'))
+    ),
+        expired_1 as (
+      select exempt_id from exempt_1
+      where exemption_expiry is not null and exemption_expiry::date < current_date
+    ),
+        exempt_2 as (
+      select
+        id as exempt_id,
+        tags->>'${var.exemption_expiry_tag}' as exemption_expiry
+      from
+        azure_compute_virtual_machine
+      where
+        tags->>'${var.exemption_tag_key}' is not null
+          and 'KSI-CMT-02' = any(string_to_array(tags->>'${var.exemption_tag_key}', ':'))
+    ),
+        expired_2 as (
+      select exempt_id from exempt_2
+      where exemption_expiry is not null and exemption_expiry::date < current_date
+    )
     -- KSI-CMT-02: Redeployment (Immutable Infrastructure)
     -- Use immutable patterns - redeploy rather than modify in place
 
@@ -56,10 +84,16 @@ query "ksi_cmt_02_azure_check" {
     select
       id as resource,
       case
+        when exp_1.exempt_id is not null then 'alarm'
+        when e_1.exempt_id is not null and exp_1.exempt_id is null then 'skip'
         when upgrade_policy_mode in ('Automatic', 'Rolling') then 'ok'
         else 'info'
       end as status,
       case
+        when exp_1.exempt_id is not null
+          then name || ' has EXPIRED exemption (expired: ' || e_1.exemption_expiry || ').'
+        when e_1.exempt_id is not null
+          then name || ' is exempt.'
         when upgrade_policy_mode in ('Automatic', 'Rolling')
           then name || ' uses ' || upgrade_policy_mode || ' upgrade policy (supports immutable deployments).'
         else name || ' uses Manual upgrade policy (may not follow immutable pattern).'
@@ -67,18 +101,28 @@ query "ksi_cmt_02_azure_check" {
       subscription_id
     from
       azure_compute_virtual_machine_scale_set
+      left join exempt_1 as e_1 on azure_compute_virtual_machine_scale_set.id = e_1.exempt_id
+      left join expired_1 as exp_1 on azure_compute_virtual_machine_scale_set.id = exp_1.exempt_id
+
 
     union all
+
 
     -- Check for long-running VMs that may violate immutable infrastructure pattern
     select
       id as resource,
       case
+        when exp_2.exempt_id is not null then 'alarm'
+        when e_2.exempt_id is not null and exp_2.exempt_id is null then 'skip'
         when date_part('day', now() - time_created) <= 30 then 'ok'
         when tags ->> 'Lifecycle' = 'static' then 'ok'
         else 'info'
       end as status,
       case
+        when exp_2.exempt_id is not null
+          then name || ' has EXPIRED exemption (expired: ' || e_2.exemption_expiry || ').'
+        when e_2.exempt_id is not null
+          then name || ' is exempt.'
         when date_part('day', now() - time_created) <= 30
           then name || ' is ' || date_part('day', now() - time_created)::int || ' days old (within immutable pattern).'
         when tags ->> 'Lifecycle' = 'static'
@@ -88,6 +132,8 @@ query "ksi_cmt_02_azure_check" {
       subscription_id
     from
       azure_compute_virtual_machine
+      left join exempt_2 as e_2 on azure_compute_virtual_machine.id = e_2.exempt_id
+      left join expired_2 as exp_2 on azure_compute_virtual_machine.id = exp_2.exempt_id
     where
       power_state = 'running'
   EOQ

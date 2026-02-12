@@ -5,5 +5,6 @@ benchmark "fedramp_20x_consolidated" {
   children = [
     benchmark.fedramp_20x_aws,
     benchmark.fedramp_20x_azure,
+    benchmark.fedramp_20x_entraid,
   ]
 }

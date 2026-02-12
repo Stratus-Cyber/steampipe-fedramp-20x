@@ -2,6 +2,20 @@
 
 query "ksi_tpr_03_azure_check" {
   sql = <<-EOQ
+    with exempt_1 as (
+      select
+        id as exempt_id,
+        tags->>'${var.exemption_expiry_tag}' as exemption_expiry
+      from
+        azure_container_registry
+      where
+        tags->>'${var.exemption_tag_key}' is not null
+          and 'KSI-TPR-03' = any(string_to_array(tags->>'${var.exemption_tag_key}', ':'))
+    ),
+        expired_1 as (
+      select exempt_id from exempt_1
+      where exemption_expiry is not null and exemption_expiry::date < current_date
+    )
     -- KSI-TPR-03: Supply Chain Risk Management
     -- Identify and mitigate supply chain risks
 
@@ -9,10 +23,16 @@ query "ksi_tpr_03_azure_check" {
     select
       id as resource,
       case
+        when exp_1.exempt_id is not null then 'alarm'
+        when e_1.exempt_id is not null and exp_1.exempt_id is null then 'skip'
         when sku_tier = 'Premium' then 'ok'
         else 'alarm'
       end as status,
       case
+        when exp_1.exempt_id is not null
+          then name || ' has EXPIRED exemption (expired: ' || e_1.exemption_expiry || ').'
+        when e_1.exempt_id is not null
+          then name || ' is exempt.'
         when sku_tier = 'Premium'
           then name || ' supports vulnerability scanning (Premium SKU, integrates with Microsoft Defender).'
         else name || ' does NOT support comprehensive vulnerability scanning (requires Premium SKU).'
@@ -20,8 +40,12 @@ query "ksi_tpr_03_azure_check" {
       subscription_id
     from
       azure_container_registry
+      left join exempt_1 as e_1 on azure_container_registry.id = e_1.exempt_id
+      left join expired_1 as exp_1 on azure_container_registry.id = exp_1.exempt_id
+
 
     union all
+
 
     -- Check Microsoft Defender for Containers is enabled
     select

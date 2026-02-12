@@ -5,80 +5,142 @@ query "ksi_cna_01_aws_check" {
     -- KSI-CNA-01: Restrict Network Traffic
     -- Limit inbound and outbound network traffic to only what is required
 
+    with exempt_sgs as (
+      select
+        arn,
+        tags->>'${var.exemption_expiry_tag}' as exemption_expiry
+      from
+        aws_tagging_resource
+      where
+        tags->>'${var.exemption_tag_key}' is not null
+          and 'KSI-CNA-01' = any(string_to_array(tags->>'${var.exemption_tag_key}', ':'))
+        and arn like 'arn:aws:ec2:%:security-group/%'
+    ),
+    expired_sgs as (
+      select arn from exempt_sgs
+      where exemption_expiry is not null and exemption_expiry::date < current_date
+    ),
+    exempt_nacls as (
+      select
+        arn,
+        tags->>'${var.exemption_expiry_tag}' as exemption_expiry
+      from
+        aws_tagging_resource
+      where
+        tags->>'${var.exemption_tag_key}' is not null
+          and 'KSI-CNA-01' = any(string_to_array(tags->>'${var.exemption_tag_key}', ':'))
+        and arn like 'arn:aws:ec2:%:network-acl/%'
+    ),
+    expired_nacls as (
+      select arn from exempt_nacls
+      where exemption_expiry is not null and exemption_expiry::date < current_date
+    )
     -- Check for overly permissive inbound security group rules (0.0.0.0/0)
     select
-      'arn:aws:ec2:' || region || ':' || account_id || ':security-group-rule/' || security_group_rule_id as resource,
+      'arn:aws:ec2:' || r.region || ':' || r.account_id || ':security-group-rule/' || r.security_group_rule_id as resource,
       case
-        when cidr_ipv4 = '0.0.0.0/0' and is_egress = false then 'alarm'
+        when esg.arn is not null then 'alarm'
+        when e.arn is not null and esg.arn is null then 'skip'
+        when r.cidr_ipv4 = '0.0.0.0/0' and r.is_egress = false then 'alarm'
         else 'ok'
       end as status,
       case
-        when cidr_ipv4 = '0.0.0.0/0' and is_egress = false
-          then 'Security group rule ' || security_group_rule_id || ' allows unrestricted inbound access from 0.0.0.0/0 on ' ||
-            coalesce(ip_protocol || ' port ' || from_port::text, 'all protocols') || '.'
-        else 'Security group rule ' || security_group_rule_id || ' has appropriate inbound restrictions.'
+        when esg.arn is not null
+          then 'Security group rule ' || r.security_group_rule_id || ' has EXPIRED exemption (expired: ' || e.exemption_expiry || ').'
+        when e.arn is not null
+          then 'Security group rule ' || r.security_group_rule_id || ' is exempt.', 'Not specified')
+        when r.cidr_ipv4 = '0.0.0.0/0' and r.is_egress = false
+          then 'Security group rule ' || r.security_group_rule_id || ' allows unrestricted inbound access from 0.0.0.0/0 on ' ||
+            coalesce(r.ip_protocol || ' port ' || r.from_port::text, 'all protocols') || '.'
+        else 'Security group rule ' || r.security_group_rule_id || ' has appropriate inbound restrictions.'
       end as reason,
-      account_id
+      r.account_id
     from
-      aws_vpc_security_group_rule
+      aws_vpc_security_group_rule as r
+      left join aws_vpc_security_group as sg on r.group_id = sg.group_id
+      left join exempt_sgs as e on sg.arn = e.arn
+      left join expired_sgs as esg on sg.arn = esg.arn
     where
-      cidr_ipv4 = '0.0.0.0/0' and is_egress = false
+      r.cidr_ipv4 = '0.0.0.0/0' and r.is_egress = false
 
     union all
 
     -- Check for unrestricted outbound rules (all protocols to 0.0.0.0/0)
     select
-      'arn:aws:ec2:' || region || ':' || account_id || ':security-group-rule/' || security_group_rule_id as resource,
+      'arn:aws:ec2:' || r.region || ':' || r.account_id || ':security-group-rule/' || r.security_group_rule_id as resource,
       case
-        when cidr_ipv4 = '0.0.0.0/0' and is_egress = true and ip_protocol = '-1' then 'alarm'
+        when esg.arn is not null then 'alarm'
+        when e.arn is not null and esg.arn is null then 'skip'
+        when r.cidr_ipv4 = '0.0.0.0/0' and r.is_egress = true and r.ip_protocol = '-1' then 'alarm'
         else 'ok'
       end as status,
       case
-        when cidr_ipv4 = '0.0.0.0/0' and is_egress = true and ip_protocol = '-1'
-          then 'Security group rule ' || security_group_rule_id || ' allows unrestricted outbound traffic (all protocols to 0.0.0.0/0).'
-        else 'Security group rule ' || security_group_rule_id || ' has appropriate outbound restrictions.'
+        when esg.arn is not null
+          then 'Security group rule ' || r.security_group_rule_id || ' has EXPIRED exemption (expired: ' || e.exemption_expiry || ').'
+        when e.arn is not null
+          then 'Security group rule ' || r.security_group_rule_id || ' is exempt.', 'Not specified')
+        when r.cidr_ipv4 = '0.0.0.0/0' and r.is_egress = true and r.ip_protocol = '-1'
+          then 'Security group rule ' || r.security_group_rule_id || ' allows unrestricted outbound traffic (all protocols to 0.0.0.0/0).'
+        else 'Security group rule ' || r.security_group_rule_id || ' has appropriate outbound restrictions.'
       end as reason,
-      account_id
+      r.account_id
     from
-      aws_vpc_security_group_rule
+      aws_vpc_security_group_rule as r
+      left join aws_vpc_security_group as sg on r.group_id = sg.group_id
+      left join exempt_sgs as e on sg.arn = e.arn
+      left join expired_sgs as esg on sg.arn = esg.arn
     where
-      cidr_ipv4 = '0.0.0.0/0' and is_egress = true and ip_protocol = '-1'
+      r.cidr_ipv4 = '0.0.0.0/0' and r.is_egress = true and r.ip_protocol = '-1'
 
     union all
 
     -- Check for default NACLs (may be overly permissive)
     select
-      'arn:aws:ec2:' || region || ':' || account_id || ':network-acl/' || network_acl_id as resource,
+      'arn:aws:ec2:' || n.region || ':' || n.account_id || ':network-acl/' || n.network_acl_id as resource,
       case
-        when is_default = true then 'info'
+        when en.arn is not null then 'alarm'
+        when e.arn is not null and en.arn is null then 'skip'
+        when n.is_default = true then 'info'
         else 'ok'
       end as status,
       case
-        when is_default = true then 'VPC ' || vpc_id || ' is using default NACL which may be overly permissive (review recommended).'
-        else 'VPC ' || vpc_id || ' uses custom NACL (appropriate network controls).'
+        when en.arn is not null
+          then 'NACL ' || n.network_acl_id || ' has EXPIRED exemption (expired: ' || e.exemption_expiry || ').'
+        when e.arn is not null
+          then 'NACL ' || n.network_acl_id || ' is exempt.', 'Not specified')
+        when n.is_default = true then 'VPC ' || n.vpc_id || ' is using default NACL which may be overly permissive (review recommended).'
+        else 'VPC ' || n.vpc_id || ' uses custom NACL (appropriate network controls).'
       end as reason,
-      account_id
+      n.account_id
     from
-      aws_vpc_network_acl
+      aws_vpc_network_acl as n
+      left join exempt_nacls as e on ('arn:aws:ec2:' || n.region || ':' || n.account_id || ':network-acl/' || n.network_acl_id) = e.arn
+      left join expired_nacls as en on ('arn:aws:ec2:' || n.region || ':' || n.account_id || ':network-acl/' || n.network_acl_id) = en.arn
     where
-      is_default = true
+      n.is_default = true
 
     union all
 
     -- Check sensitive ports (SSH/RDP/DB/Cache/Search) open to 0.0.0.0/0
     select
-      'arn:aws:ec2:' || region || ':' || account_id || ':security-group-rule/' || security_group_rule_id as resource,
+      'arn:aws:ec2:' || r.region || ':' || r.account_id || ':security-group-rule/' || r.security_group_rule_id as resource,
       case
-        when cidr_ipv4 = '0.0.0.0/0' and is_egress = false
-          and from_port in (22, 3389, 3306, 5432, 1433, 27017, 5439, 6379, 11211, 9200, 9300) then 'alarm'
+        when esg.arn is not null then 'alarm'
+        when e.arn is not null and esg.arn is null then 'skip'
+        when r.cidr_ipv4 = '0.0.0.0/0' and r.is_egress = false
+          and r.from_port in (22, 3389, 3306, 5432, 1433, 27017, 5439, 6379, 11211, 9200, 9300) then 'alarm'
         else 'ok'
       end as status,
       case
-        when cidr_ipv4 = '0.0.0.0/0' and is_egress = false
-          and from_port in (22, 3389, 3306, 5432, 1433, 27017, 5439, 6379, 11211, 9200, 9300)
-          then 'CRITICAL: Security group rule ' || security_group_rule_id || ' exposes sensitive port ' || from_port ||
+        when esg.arn is not null
+          then 'Security group rule ' || r.security_group_rule_id || ' has EXPIRED exemption (expired: ' || e.exemption_expiry || ').'
+        when e.arn is not null
+          then 'Security group rule ' || r.security_group_rule_id || ' is exempt.', 'Not specified')
+        when r.cidr_ipv4 = '0.0.0.0/0' and r.is_egress = false
+          and r.from_port in (22, 3389, 3306, 5432, 1433, 27017, 5439, 6379, 11211, 9200, 9300)
+          then 'CRITICAL: Security group rule ' || r.security_group_rule_id || ' exposes sensitive port ' || r.from_port ||
             ' (' ||
-            case from_port
+            case r.from_port
               when 22 then 'SSH'
               when 3389 then 'RDP'
               when 3306 then 'MySQL'
@@ -92,15 +154,18 @@ query "ksi_cna_01_aws_check" {
               when 9300 then 'Elasticsearch'
             end ||
             ') to 0.0.0.0/0.'
-        else 'Security group rule ' || security_group_rule_id || ' does not expose sensitive ports to internet.'
+        else 'Security group rule ' || r.security_group_rule_id || ' does not expose sensitive ports to internet.'
       end as reason,
-      account_id
+      r.account_id
     from
-      aws_vpc_security_group_rule
+      aws_vpc_security_group_rule as r
+      left join aws_vpc_security_group as sg on r.group_id = sg.group_id
+      left join exempt_sgs as e on sg.arn = e.arn
+      left join expired_sgs as esg on sg.arn = esg.arn
     where
-      cidr_ipv4 = '0.0.0.0/0'
-      and is_egress = false
-      and from_port in (22, 3389, 3306, 5432, 1433, 27017, 5439, 6379, 11211, 9200, 9300)
+      r.cidr_ipv4 = '0.0.0.0/0'
+      and r.is_egress = false
+      and r.from_port in (22, 3389, 3306, 5432, 1433, 27017, 5439, 6379, 11211, 9200, 9300)
   EOQ
 }
 
@@ -109,114 +174,238 @@ query "ksi_cna_02_aws_check" {
     -- KSI-CNA-02: Attack Surface
     -- Minimize exposed services and lateral movement paths
 
+    with exempt_instances as (
+      select
+        arn,
+        tags->>'${var.exemption_expiry_tag}' as exemption_expiry
+      from
+        aws_tagging_resource
+      where
+        tags->>'${var.exemption_tag_key}' is not null
+          and 'KSI-CNA-02' = any(string_to_array(tags->>'${var.exemption_tag_key}', ':'))
+        and arn like 'arn:aws:ec2:%:instance/%'
+    ),
+    expired_instances as (
+      select arn from exempt_instances
+      where exemption_expiry is not null and exemption_expiry::date < current_date
+    ),
+    exempt_sgs as (
+      select
+        arn,
+        tags->>'${var.exemption_expiry_tag}' as exemption_expiry
+      from
+        aws_tagging_resource
+      where
+        tags->>'${var.exemption_tag_key}' is not null
+          and 'KSI-CNA-02' = any(string_to_array(tags->>'${var.exemption_tag_key}', ':'))
+        and arn like 'arn:aws:ec2:%:security-group/%'
+    ),
+    expired_sgs as (
+      select arn from exempt_sgs
+      where exemption_expiry is not null and exemption_expiry::date < current_date
+    ),
+    exempt_buckets as (
+      select
+        arn,
+        tags->>'${var.exemption_expiry_tag}' as exemption_expiry
+      from
+        aws_tagging_resource
+      where
+        tags->>'${var.exemption_tag_key}' is not null
+          and 'KSI-CNA-02' = any(string_to_array(tags->>'${var.exemption_tag_key}', ':'))
+        and arn like 'arn:aws:s3:::%'
+    ),
+    expired_buckets as (
+      select arn from exempt_buckets
+      where exemption_expiry is not null and exemption_expiry::date < current_date
+    ),
+    exempt_rds as (
+      select
+        arn,
+        tags->>'${var.exemption_expiry_tag}' as exemption_expiry
+      from
+        aws_tagging_resource
+      where
+        tags->>'${var.exemption_tag_key}' is not null
+          and 'KSI-CNA-02' = any(string_to_array(tags->>'${var.exemption_tag_key}', ':'))
+        and arn like 'arn:aws:rds:%:db:%'
+    ),
+    expired_rds as (
+      select arn from exempt_rds
+      where exemption_expiry is not null and exemption_expiry::date < current_date
+    ),
+    exempt_albs as (
+      select
+        arn,
+        tags->>'${var.exemption_expiry_tag}' as exemption_expiry
+      from
+        aws_tagging_resource
+      where
+        tags->>'${var.exemption_tag_key}' is not null
+          and 'KSI-CNA-02' = any(string_to_array(tags->>'${var.exemption_tag_key}', ':'))
+        and arn like 'arn:aws:elasticloadbalancing:%:loadbalancer/%'
+    ),
+    expired_albs as (
+      select arn from exempt_albs
+      where exemption_expiry is not null and exemption_expiry::date < current_date
+    )
     -- Check EC2 instances with public IP addresses
     select
-      arn as resource,
+      i.arn as resource,
       case
-        when public_ip_address is not null then 'alarm'
+        when ei.arn is not null then 'alarm'
+        when e.arn is not null and ei.arn is null then 'skip'
+        when i.public_ip_address is not null then 'alarm'
         else 'ok'
       end as status,
       case
-        when public_ip_address is not null then instance_id || ' has public IP ' || public_ip_address || ' (expands attack surface).'
-        else instance_id || ' does not have a public IP.'
+        when ei.arn is not null
+          then i.instance_id || ' has EXPIRED exemption (expired: ' || e.exemption_expiry || ').'
+        when e.arn is not null
+          then i.instance_id || ' is exempt.', 'Not specified')
+        when i.public_ip_address is not null then i.instance_id || ' has public IP ' || i.public_ip_address || ' (expands attack surface).'
+        else i.instance_id || ' does not have a public IP.'
       end as reason,
-      account_id
+      i.account_id
     from
-      aws_ec2_instance
+      aws_ec2_instance as i
+      left join exempt_instances as e on i.arn = e.arn
+      left join expired_instances as ei on i.arn = ei.arn
     where
-      instance_state = 'running'
+      i.instance_state = 'running'
 
     union all
 
     -- Check for non-standard ports open inbound from 0.0.0.0/0
     select
-      'arn:aws:ec2:' || region || ':' || account_id || ':security-group/' || group_id as resource,
+      'arn:aws:ec2:' || r.region || ':' || r.account_id || ':security-group/' || r.group_id as resource,
       case
-        when is_egress = false and cidr_ipv4 = '0.0.0.0/0' and from_port not in (443, 80) then 'alarm'
+        when esg.arn is not null then 'alarm'
+        when e.arn is not null and esg.arn is null then 'skip'
+        when r.is_egress = false and r.cidr_ipv4 = '0.0.0.0/0' and r.from_port not in (443, 80) then 'alarm'
         else 'ok'
       end as status,
       case
-        when is_egress = false and cidr_ipv4 = '0.0.0.0/0' and from_port not in (443, 80)
-          then 'Security group ' || group_id || ' allows non-standard port ' || from_port || ' from 0.0.0.0/0 (expands attack surface).'
-        else 'Security group ' || group_id || ' appropriately restricts non-HTTP/S ports.'
+        when esg.arn is not null
+          then 'Security group ' || r.group_id || ' has EXPIRED exemption (expired: ' || e.exemption_expiry || ').'
+        when e.arn is not null
+          then 'Security group ' || r.group_id || ' is exempt.', 'Not specified')
+        when r.is_egress = false and r.cidr_ipv4 = '0.0.0.0/0' and r.from_port not in (443, 80)
+          then 'Security group ' || r.group_id || ' allows non-standard port ' || r.from_port || ' from 0.0.0.0/0 (expands attack surface).'
+        else 'Security group ' || r.group_id || ' appropriately restricts non-HTTP/S ports.'
       end as reason,
-      account_id
+      r.account_id
     from
-      aws_vpc_security_group_rule
+      aws_vpc_security_group_rule as r
+      left join aws_vpc_security_group as sg on r.group_id = sg.group_id
+      left join exempt_sgs as e on sg.arn = e.arn
+      left join expired_sgs as esg on sg.arn = esg.arn
     where
-      is_egress = false and cidr_ipv4 = '0.0.0.0/0' and from_port not in (443, 80)
+      r.is_egress = false and r.cidr_ipv4 = '0.0.0.0/0' and r.from_port not in (443, 80)
 
     union all
 
     -- Check EC2 instances enforce IMDSv2 (prevents SSRF credential theft)
     select
-      arn as resource,
+      i.arn as resource,
       case
-        when coalesce(metadata_options ->> 'HttpTokens', 'optional') != 'required' then 'alarm'
+        when ei.arn is not null then 'alarm'
+        when e.arn is not null and ei.arn is null then 'skip'
+        when coalesce(i.metadata_options ->> 'HttpTokens', 'optional') != 'required' then 'alarm'
         else 'ok'
       end as status,
       case
-        when coalesce(metadata_options ->> 'HttpTokens', 'optional') != 'required'
-          then instance_id || ' does NOT enforce IMDSv2 (vulnerable to SSRF credential theft).'
-        else instance_id || ' enforces IMDSv2 (protected against SSRF).'
+        when ei.arn is not null
+          then i.instance_id || ' has EXPIRED exemption (expired: ' || e.exemption_expiry || ').'
+        when e.arn is not null
+          then i.instance_id || ' is exempt.', 'Not specified')
+        when coalesce(i.metadata_options ->> 'HttpTokens', 'optional') != 'required'
+          then i.instance_id || ' does NOT enforce IMDSv2 (vulnerable to SSRF credential theft).'
+        else i.instance_id || ' enforces IMDSv2 (protected against SSRF).'
       end as reason,
-      account_id
+      i.account_id
     from
-      aws_ec2_instance
+      aws_ec2_instance as i
+      left join exempt_instances as e on i.arn = e.arn
+      left join expired_instances as ei on i.arn = ei.arn
     where
-      instance_state = 'running'
+      i.instance_state = 'running'
 
     union all
 
     -- Check S3 buckets with public policies
     select
-      arn as resource,
+      b.arn as resource,
       case
-        when bucket_policy_is_public = true then 'alarm'
+        when eb.arn is not null then 'alarm'
+        when e.arn is not null and eb.arn is null then 'skip'
+        when b.bucket_policy_is_public = true then 'alarm'
         else 'ok'
       end as status,
       case
-        when bucket_policy_is_public = true then name || ' has a public bucket policy (expands attack surface).'
-        else name || ' bucket policy is not public.'
+        when eb.arn is not null
+          then b.name || ' has EXPIRED exemption (expired: ' || e.exemption_expiry || ').'
+        when e.arn is not null
+          then b.name || ' is exempt.', 'Not specified')
+        when b.bucket_policy_is_public = true then b.name || ' has a public bucket policy (expands attack surface).'
+        else b.name || ' bucket policy is not public.'
       end as reason,
-      account_id
+      b.account_id
     from
-      aws_s3_bucket
+      aws_s3_bucket as b
+      left join exempt_buckets as e on b.arn = e.arn
+      left join expired_buckets as eb on b.arn = eb.arn
 
     union all
 
     -- Check RDS instances publicly accessible
     select
-      arn as resource,
+      r.arn as resource,
       case
-        when publicly_accessible = true then 'alarm'
+        when er.arn is not null then 'alarm'
+        when e.arn is not null and er.arn is null then 'skip'
+        when r.publicly_accessible = true then 'alarm'
         else 'ok'
       end as status,
       case
-        when publicly_accessible = true
-          then db_instance_identifier || ' is publicly accessible at ' || coalesce(endpoint_address, 'pending') || ' (CRITICAL attack surface).'
-        else db_instance_identifier || ' is not publicly accessible.'
+        when er.arn is not null
+          then r.db_instance_identifier || ' has EXPIRED exemption (expired: ' || e.exemption_expiry || ').'
+        when e.arn is not null
+          then r.db_instance_identifier || ' is exempt.', 'Not specified')
+        when r.publicly_accessible = true
+          then r.db_instance_identifier || ' is publicly accessible at ' || coalesce(r.endpoint_address, 'pending') || ' (CRITICAL attack surface).'
+        else r.db_instance_identifier || ' is not publicly accessible.'
       end as reason,
-      account_id
+      r.account_id
     from
-      aws_rds_db_instance
+      aws_rds_db_instance as r
+      left join exempt_rds as e on r.arn = e.arn
+      left join expired_rds as er on r.arn = er.arn
 
     union all
 
     -- Check for internet-facing ALBs (need WAF verification)
     select
-      arn as resource,
+      a.arn as resource,
       case
-        when scheme = 'internet-facing' then 'info'
+        when ea.arn is not null then 'alarm'
+        when e.arn is not null and ea.arn is null then 'skip'
+        when a.scheme = 'internet-facing' then 'info'
         else 'ok'
       end as status,
       case
-        when scheme = 'internet-facing' then name || ' is internet-facing (verify WAF association for protection).'
-        else name || ' is internal (reduced attack surface).'
+        when ea.arn is not null
+          then a.name || ' has EXPIRED exemption (expired: ' || e.exemption_expiry || ').'
+        when e.arn is not null
+          then a.name || ' is exempt.', 'Not specified')
+        when a.scheme = 'internet-facing' then a.name || ' is internet-facing (verify WAF association for protection).'
+        else a.name || ' is internal (reduced attack surface).'
       end as reason,
-      account_id
+      a.account_id
     from
-      aws_ec2_application_load_balancer
+      aws_ec2_application_load_balancer as a
+      left join exempt_albs as e on a.arn = e.arn
+      left join expired_albs as ea on a.arn = ea.arn
   EOQ
 }
 
@@ -225,14 +414,65 @@ query "ksi_cna_03_aws_check" {
     -- KSI-CNA-03: Enforce Traffic Flow
     -- Control where network traffic can flow using segmentation and routing
 
+    with exempt_vpcs as (
+      select
+        arn,
+        tags->>'${var.exemption_expiry_tag}' as exemption_expiry
+      from
+        aws_tagging_resource
+      where
+        tags->>'${var.exemption_tag_key}' is not null
+          and 'KSI-CNA-03' = any(string_to_array(tags->>'${var.exemption_tag_key}', ':'))
+        and arn like 'arn:aws:ec2:%:vpc/%'
+    ),
+    expired_vpcs as (
+      select arn from exempt_vpcs
+      where exemption_expiry is not null and exemption_expiry::date < current_date
+    ),
+    exempt_subnets as (
+      select
+        arn,
+        tags->>'${var.exemption_expiry_tag}' as exemption_expiry
+      from
+        aws_tagging_resource
+      where
+        tags->>'${var.exemption_tag_key}' is not null
+          and 'KSI-CNA-03' = any(string_to_array(tags->>'${var.exemption_tag_key}', ':'))
+        and arn like 'arn:aws:ec2:%:subnet/%'
+    ),
+    expired_subnets as (
+      select arn from exempt_subnets
+      where exemption_expiry is not null and exemption_expiry::date < current_date
+    ),
+    exempt_route_tables as (
+      select
+        arn,
+        tags->>'${var.exemption_expiry_tag}' as exemption_expiry
+      from
+        aws_tagging_resource
+      where
+        tags->>'${var.exemption_tag_key}' is not null
+          and 'KSI-CNA-03' = any(string_to_array(tags->>'${var.exemption_tag_key}', ':'))
+        and arn like 'arn:aws:ec2:%:route-table/%'
+    ),
+    expired_route_tables as (
+      select arn from exempt_route_tables
+      where exemption_expiry is not null and exemption_expiry::date < current_date
+    )
     -- Check VPCs have flow logs enabled
     select
       v.arn as resource,
       case
+        when ev.arn is not null then 'alarm'
+        when e.arn is not null and ev.arn is null then 'skip'
         when f.flow_log_id is not null then 'ok'
         else 'alarm'
       end as status,
       case
+        when ev.arn is not null
+          then v.vpc_id || ' has EXPIRED exemption (expired: ' || e.exemption_expiry || ').'
+        when e.arn is not null
+          then v.vpc_id || ' is exempt.', 'Not specified')
         when f.flow_log_id is not null then v.vpc_id || ' has flow logs enabled for traffic visibility.'
         else v.vpc_id || ' does NOT have flow logs enabled.'
       end as reason,
@@ -240,56 +480,88 @@ query "ksi_cna_03_aws_check" {
     from
       aws_vpc as v
       left join aws_vpc_flow_log as f on v.vpc_id = f.resource_id
+      left join exempt_vpcs as e on v.arn = e.arn
+      left join expired_vpcs as ev on v.arn = ev.arn
 
     union all
 
     -- Check subnets don't auto-assign public IPs (bypass traffic controls)
     select
-      subnet_arn as resource,
+      s.subnet_arn as resource,
       case
-        when map_public_ip_on_launch = true then 'alarm'
+        when es.arn is not null then 'alarm'
+        when e.arn is not null and es.arn is null then 'skip'
+        when s.map_public_ip_on_launch = true then 'alarm'
         else 'ok'
       end as status,
       case
-        when map_public_ip_on_launch = true
-          then subnet_id || ' auto-assigns public IPs (may bypass traffic controls, disable except for public subnets).'
-        else subnet_id || ' does not auto-assign public IPs.'
+        when es.arn is not null
+          then s.subnet_id || ' has EXPIRED exemption (expired: ' || e.exemption_expiry || ').'
+        when e.arn is not null
+          then s.subnet_id || ' is exempt.', 'Not specified')
+        when s.map_public_ip_on_launch = true
+          then s.subnet_id || ' auto-assigns public IPs (may bypass traffic controls, disable except for public subnets).'
+        else s.subnet_id || ' does not auto-assign public IPs.'
       end as reason,
-      account_id
+      s.account_id
     from
-      aws_vpc_subnet
+      aws_vpc_subnet as s
+      left join exempt_subnets as e on s.subnet_arn = e.arn
+      left join expired_subnets as es on s.subnet_arn = es.arn
 
     union all
 
     -- Check route tables with internet gateway routes (identify internet-facing paths)
     select
-      'arn:aws:ec2:' || region || ':' || account_id || ':route-table/' || route_table_id as resource,
-      'info' as status,
-      route_table_id || ' in VPC ' || vpc_id || ' has internet gateway route (verify appropriate for subnet tier).' as reason,
-      account_id
+      'arn:aws:ec2:' || rt.region || ':' || rt.account_id || ':route-table/' || rt.route_table_id as resource,
+      case
+        when ert.arn is not null then 'alarm'
+        when e.arn is not null and ert.arn is null then 'skip'
+        else 'info'
+      end as status,
+      case
+        when ert.arn is not null
+          then rt.route_table_id || ' has EXPIRED exemption (expired: ' || e.exemption_expiry || ').'
+        when e.arn is not null
+          then rt.route_table_id || ' is exempt.', 'Not specified')
+        else rt.route_table_id || ' in VPC ' || rt.vpc_id || ' has internet gateway route (verify appropriate for subnet tier).'
+      end as reason,
+      rt.account_id
     from
-      aws_vpc_route_table
+      aws_vpc_route_table as rt
+      left join exempt_route_tables as e on ('arn:aws:ec2:' || rt.region || ':' || rt.account_id || ':route-table/' || rt.route_table_id) = e.arn
+      left join expired_route_tables as ert on ('arn:aws:ec2:' || rt.region || ':' || rt.account_id || ':route-table/' || rt.route_table_id) = ert.arn
     where
-      routes::text like '%igw-%'
+      rt.routes::text like '%igw-%'
 
     union all
 
     -- Check VPCs have sufficient VPC endpoints (S3/KMS/SSM minimum for private traffic)
+    -- Note: VPC endpoints aggregate by VPC, exemption applies at VPC level
     select
-      'arn:aws:ec2:' || region || ':' || vpc_id || ':vpc-endpoint-summary' as resource,
+      'arn:aws:ec2:' || ep.region || ':' || ep.vpc_id || ':vpc-endpoint-summary' as resource,
       case
+        when ev.arn is not null then 'alarm'
+        when e.arn is not null and ev.arn is null then 'skip'
         when count(*) >= 3 then 'ok'
         else 'info'
       end as status,
       case
-        when count(*) >= 3 then vpc_id || ' has ' || count(*) || ' VPC endpoints (sufficient private traffic routing).'
-        else vpc_id || ' has only ' || count(*) || ' VPC endpoints (recommend S3/KMS/SSM minimum for private traffic).'
+        when ev.arn is not null
+          then ep.vpc_id || ' has EXPIRED exemption (expired: ' || e.exemption_expiry || ').'
+        when e.arn is not null
+          then ep.vpc_id || ' is exempt.', 'Not specified')
+        when count(*) >= 3 then ep.vpc_id || ' has ' || count(*) || ' VPC endpoints (sufficient private traffic routing).'
+        else ep.vpc_id || ' has only ' || count(*) || ' VPC endpoints (recommend S3/KMS/SSM minimum for private traffic).'
       end as reason,
-      max(account_id) as account_id
+      max(ep.account_id) as account_id
     from
-      aws_vpc_endpoint
+      aws_vpc_endpoint as ep
+      left join aws_vpc as v on ep.vpc_id = v.vpc_id
+      left join exempt_vpcs as e on v.arn = e.arn
+      left join expired_vpcs as ev on v.arn = ev.arn
     group by
-      vpc_id, region
+      ep.vpc_id, ep.region, ev.arn, e.arn, e.exemption_expiry
   EOQ
 }
 
@@ -298,25 +570,48 @@ query "ksi_cna_04_aws_check" {
     -- KSI-CNA-04: Immutable Infrastructure
     -- Deploy infrastructure that is replaced rather than modified
 
+    with exempt_instances as (
+      select
+        arn,
+        tags->>'${var.exemption_expiry_tag}' as exemption_expiry
+      from
+        aws_tagging_resource
+      where
+        tags->>'${var.exemption_tag_key}' is not null
+          and 'KSI-CNA-04' = any(string_to_array(tags->>'${var.exemption_tag_key}', ':'))
+        and arn like 'arn:aws:ec2:%:instance/%'
+    ),
+    expired_exemptions as (
+      select arn from exempt_instances
+      where exemption_expiry is not null and exemption_expiry::date < current_date
+    )
     -- Check instances have SSH keys configured (excludes static-tagged instances)
     select
-      arn as resource,
+      i.arn as resource,
       case
-        when key_name is not null and coalesce(tags ->> 'Lifecycle', '') != 'static' then 'info'
+        when ee.arn is not null then 'alarm'
+        when e.arn is not null and ee.arn is null then 'skip'
+        when i.key_name is not null and coalesce(i.tags ->> 'Lifecycle', '') != 'static' then 'info'
         else 'ok'
       end as status,
       case
-        when key_name is not null and coalesce(tags ->> 'Lifecycle', '') != 'static'
-          then instance_id || ' has SSH key "' || key_name || '" configured (immutable infrastructure should not have SSH access).'
-        when key_name is not null and tags ->> 'Lifecycle' = 'static'
-          then instance_id || ' has SSH key but is tagged as static/persistent.'
-        else instance_id || ' does not have SSH keys (follows immutable pattern).'
+        when ee.arn is not null
+          then i.instance_id || ' has EXPIRED exemption (expired: ' || e.exemption_expiry || ').'
+        when e.arn is not null
+          then i.instance_id || ' is exempt.', 'Not specified')
+        when i.key_name is not null and coalesce(i.tags ->> 'Lifecycle', '') != 'static'
+          then i.instance_id || ' has SSH key "' || i.key_name || '" configured (immutable infrastructure should not have SSH access).'
+        when i.key_name is not null and i.tags ->> 'Lifecycle' = 'static'
+          then i.instance_id || ' has SSH key but is tagged as static/persistent.'
+        else i.instance_id || ' does not have SSH keys (follows immutable pattern).'
       end as reason,
-      account_id
+      i.account_id
     from
-      aws_ec2_instance
+      aws_ec2_instance as i
+      left join exempt_instances as e on i.arn = e.arn
+      left join expired_exemptions as ee on i.arn = ee.arn
     where
-      instance_state = 'running'
+      i.instance_state = 'running'
 
   EOQ
 }
@@ -326,21 +621,59 @@ query "ksi_cna_05_aws_check" {
     -- KSI-CNA-05: Unwanted Activity Protection
     -- Protect against DDoS and application-layer attacks
 
+    with exempt_waf as (
+      select
+        arn,
+        tags->>'${var.exemption_expiry_tag}' as exemption_expiry
+      from
+        aws_tagging_resource
+      where
+        tags->>'${var.exemption_tag_key}' is not null
+          and 'KSI-CNA-05' = any(string_to_array(tags->>'${var.exemption_tag_key}', ':'))
+        and arn like 'arn:aws:wafv2:%:webacl/%'
+    ),
+    expired_waf as (
+      select arn from exempt_waf
+      where exemption_expiry is not null and exemption_expiry::date < current_date
+    ),
+    exempt_albs as (
+      select
+        arn,
+        tags->>'${var.exemption_expiry_tag}' as exemption_expiry
+      from
+        aws_tagging_resource
+      where
+        tags->>'${var.exemption_tag_key}' is not null
+          and 'KSI-CNA-05' = any(string_to_array(tags->>'${var.exemption_tag_key}', ':'))
+        and arn like 'arn:aws:elasticloadbalancing:%:loadbalancer/%'
+    ),
+    expired_albs as (
+      select arn from exempt_albs
+      where exemption_expiry is not null and exemption_expiry::date < current_date
+    )
     -- Check WAF Web ACLs have rules configured
     select
-      arn as resource,
+      w.arn as resource,
       case
-        when rules is null or jsonb_array_length(rules) = 0 then 'alarm'
+        when ew.arn is not null then 'alarm'
+        when e.arn is not null and ew.arn is null then 'skip'
+        when w.rules is null or jsonb_array_length(w.rules) = 0 then 'alarm'
         else 'ok'
       end as status,
       case
-        when rules is null or jsonb_array_length(rules) = 0
-          then name || ' (' || scope || ') has NO rules configured (provides no protection).'
-        else name || ' (' || scope || ') has ' || jsonb_array_length(rules) || ' rules configured.'
+        when ew.arn is not null
+          then w.name || ' has EXPIRED exemption (expired: ' || e.exemption_expiry || ').'
+        when e.arn is not null
+          then w.name || ' is exempt.', 'Not specified')
+        when w.rules is null or jsonb_array_length(w.rules) = 0
+          then w.name || ' (' || w.scope || ') has NO rules configured (provides no protection).'
+        else w.name || ' (' || w.scope || ') has ' || jsonb_array_length(w.rules) || ' rules configured.'
       end as reason,
-      account_id
+      w.account_id
     from
-      aws_wafv2_web_acl
+      aws_wafv2_web_acl as w
+      left join exempt_waf as e on w.arn = e.arn
+      left join expired_waf as ew on w.arn = ew.arn
 
     union all
 
@@ -348,10 +681,16 @@ query "ksi_cna_05_aws_check" {
     select
       r.arn as resource,
       case
+        when ea.arn is not null then 'alarm'
+        when e.arn is not null and ea.arn is null then 'skip'
         when s.id is null and r.scheme = 'internet-facing' then 'alarm'
         else 'ok'
       end as status,
       case
+        when ea.arn is not null
+          then r.name || ' has EXPIRED exemption (expired: ' || e.exemption_expiry || ').'
+        when e.arn is not null
+          then r.name || ' is exempt.', 'Not specified')
         when s.id is null and r.scheme = 'internet-facing'
           then r.name || ' is internet-facing but does NOT have Shield protection (vulnerable to DDoS).'
         when s.id is not null
@@ -362,12 +701,15 @@ query "ksi_cna_05_aws_check" {
     from
       aws_ec2_application_load_balancer r
       left join aws_shield_protection s on r.arn = s.resource_arn
+      left join exempt_albs as e on r.arn = e.arn
+      left join expired_albs as ea on r.arn = ea.arn
     where
       r.scheme = 'internet-facing'
 
     union all
 
     -- Check GuardDuty enabled for automated threat detection
+    -- Note: GuardDuty detectors are account-level resources, no resource-level exemptions
     select
       'arn:aws:guardduty:' || region || ':' || account_id || ':detector/' || detector_id as resource,
       case
@@ -385,6 +727,7 @@ query "ksi_cna_05_aws_check" {
     union all
 
     -- Check CloudWatch alarms have actions enabled for automated response
+    -- Note: CloudWatch alarms don't support tagging for exemptions, skipping exemption logic
     select
       alarm_arn as resource,
       case
@@ -409,94 +752,209 @@ query "ksi_cna_06_aws_check" {
     -- KSI-CNA-06: High Availability
     -- Optimize infrastructure for availability and rapid recovery
 
+    with exempt_asgs as (
+      select
+        arn,
+        tags->>'${var.exemption_expiry_tag}' as exemption_expiry
+      from
+        aws_tagging_resource
+      where
+        tags->>'${var.exemption_tag_key}' is not null
+          and 'KSI-CNA-06' = any(string_to_array(tags->>'${var.exemption_tag_key}', ':'))
+        and arn like 'arn:aws:autoscaling:%:autoScalingGroup:%'
+    ),
+    expired_asgs as (
+      select arn from exempt_asgs
+      where exemption_expiry is not null and exemption_expiry::date < current_date
+    ),
+    exempt_elasticache as (
+      select
+        arn,
+        tags->>'${var.exemption_expiry_tag}' as exemption_expiry
+      from
+        aws_tagging_resource
+      where
+        tags->>'${var.exemption_tag_key}' is not null
+          and 'KSI-CNA-06' = any(string_to_array(tags->>'${var.exemption_tag_key}', ':'))
+        and arn like 'arn:aws:elasticache:%:replicationgroup:%'
+    ),
+    expired_elasticache as (
+      select arn from exempt_elasticache
+      where exemption_expiry is not null and exemption_expiry::date < current_date
+    ),
+    exempt_albs as (
+      select
+        arn,
+        tags->>'${var.exemption_expiry_tag}' as exemption_expiry
+      from
+        aws_tagging_resource
+      where
+        tags->>'${var.exemption_tag_key}' is not null
+          and 'KSI-CNA-06' = any(string_to_array(tags->>'${var.exemption_tag_key}', ':'))
+        and arn like 'arn:aws:elasticloadbalancing:%:loadbalancer/%'
+    ),
+    expired_albs as (
+      select arn from exempt_albs
+      where exemption_expiry is not null and exemption_expiry::date < current_date
+    ),
+    exempt_rds as (
+      select
+        arn,
+        tags->>'${var.exemption_expiry_tag}' as exemption_expiry
+      from
+        aws_tagging_resource
+      where
+        tags->>'${var.exemption_tag_key}' is not null
+          and 'KSI-CNA-06' = any(string_to_array(tags->>'${var.exemption_tag_key}', ':'))
+        and arn like 'arn:aws:rds:%:db:%'
+    ),
+    expired_rds as (
+      select arn from exempt_rds
+      where exemption_expiry is not null and exemption_expiry::date < current_date
+    ),
+    exempt_ecs as (
+      select
+        arn,
+        tags->>'${var.exemption_expiry_tag}' as exemption_expiry
+      from
+        aws_tagging_resource
+      where
+        tags->>'${var.exemption_tag_key}' is not null
+          and 'KSI-CNA-06' = any(string_to_array(tags->>'${var.exemption_tag_key}', ':'))
+        and resource_type = 'ecs:service'
+    ),
+    expired_ecs as (
+      select arn from exempt_ecs
+      where exemption_expiry is not null and exemption_expiry::date < current_date
+    )
     -- Check Auto Scaling Groups deployed across multiple AZs
     select
-      autoscaling_group_arn as resource,
+      a.autoscaling_group_arn as resource,
       case
-        when jsonb_array_length(availability_zones) < 2 then 'alarm'
+        when ea.arn is not null then 'alarm'
+        when e.arn is not null and ea.arn is null then 'skip'
+        when jsonb_array_length(a.availability_zones) < 2 then 'alarm'
         else 'ok'
       end as status,
       case
-        when jsonb_array_length(availability_zones) < 2
-          then autoscaling_group_name || ' is deployed in only ' || jsonb_array_length(availability_zones) || ' AZ (single point of failure).'
-        else autoscaling_group_name || ' is deployed across ' || jsonb_array_length(availability_zones) || ' AZs (HA enabled).'
+        when ea.arn is not null
+          then a.autoscaling_group_name || ' has EXPIRED exemption (expired: ' || e.exemption_expiry || ').'
+        when e.arn is not null
+          then a.autoscaling_group_name || ' is exempt.', 'Not specified')
+        when jsonb_array_length(a.availability_zones) < 2
+          then a.autoscaling_group_name || ' is deployed in only ' || jsonb_array_length(a.availability_zones) || ' AZ (single point of failure).'
+        else a.autoscaling_group_name || ' is deployed across ' || jsonb_array_length(a.availability_zones) || ' AZs (HA enabled).'
       end as reason,
-      account_id
+      a.account_id
     from
-      aws_ec2_autoscaling_group
+      aws_ec2_autoscaling_group as a
+      left join exempt_asgs as e on a.autoscaling_group_arn = e.arn
+      left join expired_asgs as ea on a.autoscaling_group_arn = ea.arn
 
     union all
 
     -- Check ElastiCache replication groups have HA configuration
     select
-      arn as resource,
+      c.arn as resource,
       case
-        when automatic_failover != 'enabled' or multi_az != 'enabled' then 'alarm'
+        when ec.arn is not null then 'alarm'
+        when e.arn is not null and ec.arn is null then 'skip'
+        when c.automatic_failover != 'enabled' or c.multi_az != 'enabled' then 'alarm'
         else 'ok'
       end as status,
       case
-        when automatic_failover != 'enabled' or multi_az != 'enabled'
-          then replication_group_id || ' does NOT have full HA: ' ||
-            case when automatic_failover != 'enabled' then 'NO automatic failover ' else '' end ||
-            case when multi_az != 'enabled' then 'NO multi-AZ' else '' end
-        else replication_group_id || ' has automatic failover and multi-AZ enabled (HA configured).'
+        when ec.arn is not null
+          then c.replication_group_id || ' has EXPIRED exemption (expired: ' || e.exemption_expiry || ').'
+        when e.arn is not null
+          then c.replication_group_id || ' is exempt.', 'Not specified')
+        when c.automatic_failover != 'enabled' or c.multi_az != 'enabled'
+          then c.replication_group_id || ' does NOT have full HA: ' ||
+            case when c.automatic_failover != 'enabled' then 'NO automatic failover ' else '' end ||
+            case when c.multi_az != 'enabled' then 'NO multi-AZ' else '' end
+        else c.replication_group_id || ' has automatic failover and multi-AZ enabled (HA configured).'
       end as reason,
-      account_id
+      c.account_id
     from
-      aws_elasticache_replication_group
+      aws_elasticache_replication_group as c
+      left join exempt_elasticache as e on c.arn = e.arn
+      left join expired_elasticache as ec on c.arn = ec.arn
 
     union all
 
     -- Check ALBs deployed across multiple AZs
     select
-      arn as resource,
+      a.arn as resource,
       case
-        when jsonb_array_length(availability_zones) < 2 then 'alarm'
+        when ea.arn is not null then 'alarm'
+        when e.arn is not null and ea.arn is null then 'skip'
+        when jsonb_array_length(a.availability_zones) < 2 then 'alarm'
         else 'ok'
       end as status,
       case
-        when jsonb_array_length(availability_zones) < 2
-          then name || ' is deployed in only ' || jsonb_array_length(availability_zones) || ' AZ (single point of failure).'
-        else name || ' is deployed across ' || jsonb_array_length(availability_zones) || ' AZs (HA enabled).'
+        when ea.arn is not null
+          then a.name || ' has EXPIRED exemption (expired: ' || e.exemption_expiry || ').'
+        when e.arn is not null
+          then a.name || ' is exempt.', 'Not specified')
+        when jsonb_array_length(a.availability_zones) < 2
+          then a.name || ' is deployed in only ' || jsonb_array_length(a.availability_zones) || ' AZ (single point of failure).'
+        else a.name || ' is deployed across ' || jsonb_array_length(a.availability_zones) || ' AZs (HA enabled).'
       end as reason,
-      account_id
+      a.account_id
     from
-      aws_ec2_application_load_balancer
+      aws_ec2_application_load_balancer as a
+      left join exempt_albs as e on a.arn = e.arn
+      left join expired_albs as ea on a.arn = ea.arn
 
     union all
 
     -- Check RDS instances have Multi-AZ enabled
     select
-      arn as resource,
+      r.arn as resource,
       case
-        when multi_az = false then 'alarm'
+        when er.arn is not null then 'alarm'
+        when e.arn is not null and er.arn is null then 'skip'
+        when r.multi_az = false then 'alarm'
         else 'ok'
       end as status,
       case
-        when multi_az = false then db_instance_identifier || ' does NOT have Multi-AZ enabled (no automatic failover).'
-        else db_instance_identifier || ' has Multi-AZ enabled (database HA configured).'
+        when er.arn is not null
+          then r.db_instance_identifier || ' has EXPIRED exemption (expired: ' || e.exemption_expiry || ').'
+        when e.arn is not null
+          then r.db_instance_identifier || ' is exempt.', 'Not specified')
+        when r.multi_az = false then r.db_instance_identifier || ' does NOT have Multi-AZ enabled (no automatic failover).'
+        else r.db_instance_identifier || ' has Multi-AZ enabled (database HA configured).'
       end as reason,
-      account_id
+      r.account_id
     from
-      aws_rds_db_instance
+      aws_rds_db_instance as r
+      left join exempt_rds as e on r.arn = e.arn
+      left join expired_rds as er on r.arn = er.arn
 
     union all
 
     -- Check ECS services have desired count >= 2 for HA
     select
-      'arn:aws:ecs:' || region || ':' || account_id || ':service/' || service_name as resource,
+      'arn:aws:ecs:' || s.region || ':' || s.account_id || ':service/' || s.service_name as resource,
       case
-        when desired_count < 2 then 'alarm'
+        when es.arn is not null then 'alarm'
+        when e.arn is not null and es.arn is null then 'skip'
+        when s.desired_count < 2 then 'alarm'
         else 'ok'
       end as status,
       case
-        when desired_count < 2
-          then service_name || ' has desired count of ' || desired_count || ' (single task = no HA).'
-        else service_name || ' has desired count of ' || desired_count || ' (HA enabled).'
+        when es.arn is not null
+          then s.service_name || ' has EXPIRED exemption (expired: ' || e.exemption_expiry || ').'
+        when e.arn is not null
+          then s.service_name || ' is exempt.', 'Not specified')
+        when s.desired_count < 2
+          then s.service_name || ' has desired count of ' || s.desired_count || ' (single task = no HA).'
+        else s.service_name || ' has desired count of ' || s.desired_count || ' (HA enabled).'
       end as reason,
-      account_id
+      s.account_id
     from
-      aws_ecs_service
+      aws_ecs_service as s
+      left join exempt_ecs as e on ('arn:aws:ecs:' || s.region || ':' || s.account_id || ':service/' || s.service_name) = e.arn
+      left join expired_ecs as es on ('arn:aws:ecs:' || s.region || ':' || s.account_id || ':service/' || s.service_name) = es.arn
   EOQ
 }
 

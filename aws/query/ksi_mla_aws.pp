@@ -5,43 +5,105 @@ query "ksi_mla_01_aws_check" {
     -- KSI-MLA-01: SIEM / Centralized Logging
     -- Operate centralized, tamper-resistant logging
 
+    with exempt_trails as (
+      select
+        arn,
+        tags->>'${var.exemption_expiry_tag}' as exemption_expiry
+      from
+        aws_tagging_resource
+      where
+        tags->>'${var.exemption_tag_key}' is not null
+          and 'KSI-MLA-01' = any(string_to_array(tags->>'${var.exemption_tag_key}', ':'))
+        and arn like 'arn:aws:cloudtrail:%'
+    ),
+    expired_trails as (
+      select arn from exempt_trails
+      where exemption_expiry is not null and exemption_expiry::date < current_date
+    ),
+    exempt_log_groups as (
+      select
+        arn,
+        tags->>'${var.exemption_expiry_tag}' as exemption_expiry
+      from
+        aws_tagging_resource
+      where
+        tags->>'${var.exemption_tag_key}' is not null
+          and 'KSI-MLA-01' = any(string_to_array(tags->>'${var.exemption_tag_key}', ':'))
+        and arn like 'arn:aws:logs:%:log-group:%'
+    ),
+    expired_log_groups as (
+      select arn from exempt_log_groups
+      where exemption_expiry is not null and exemption_expiry::date < current_date
+    ),
+    exempt_buckets as (
+      select
+        arn,
+        tags->>'${var.exemption_expiry_tag}' as exemption_expiry
+      from
+        aws_tagging_resource
+      where
+        tags->>'${var.exemption_tag_key}' is not null
+          and 'KSI-MLA-01' = any(string_to_array(tags->>'${var.exemption_tag_key}', ':'))
+        and arn like 'arn:aws:s3:::%'
+    ),
+    expired_buckets as (
+      select arn from exempt_buckets
+      where exemption_expiry is not null and exemption_expiry::date < current_date
+    )
     -- Check CloudTrail trails have log integrity validation (tamper-resistant)
     select
-      arn as resource,
+      t.arn as resource,
       case
-        when log_file_validation_enabled = false then 'alarm'
+        when et.arn is not null then 'alarm'
+        when e.arn is not null and et.arn is null then 'skip'
+        when t.log_file_validation_enabled = false then 'alarm'
         else 'ok'
       end as status,
       case
-        when log_file_validation_enabled = false
-          then name || ' does NOT have log file validation enabled (logs lack integrity protection).'
-        else name || ' has log file validation enabled (ensures audit trail integrity).'
+        when et.arn is not null
+          then t.name || ' has EXPIRED exemption (expired: ' || e.exemption_expiry || ').'
+        when e.arn is not null
+          then t.name || ' is exempt.', 'Not specified')
+        when t.log_file_validation_enabled = false
+          then t.name || ' does NOT have log file validation enabled (logs lack integrity protection).'
+        else t.name || ' has log file validation enabled (ensures audit trail integrity).'
       end as reason,
-      account_id
+      t.account_id
     from
-      aws_cloudtrail_trail
+      aws_cloudtrail_trail as t
+      left join exempt_trails as e on t.arn = e.arn
+      left join expired_trails as et on t.arn = et.arn
 
     union all
 
     -- Check CloudWatch log groups are encrypted (protect sensitive audit data)
     select
-      arn as resource,
+      lg.arn as resource,
       case
-        when kms_key_id is null then 'alarm'
+        when elg.arn is not null then 'alarm'
+        when e.arn is not null and elg.arn is null then 'skip'
+        when lg.kms_key_id is null then 'alarm'
         else 'ok'
       end as status,
       case
-        when kms_key_id is null
-          then name || ' is NOT encrypted (SIEM data should be protected with KMS encryption).'
-        else name || ' is encrypted with KMS key ' || kms_key_id || ' (protects sensitive audit data).'
+        when elg.arn is not null
+          then lg.name || ' has EXPIRED exemption (expired: ' || e.exemption_expiry || ').'
+        when e.arn is not null
+          then lg.name || ' is exempt.', 'Not specified')
+        when lg.kms_key_id is null
+          then lg.name || ' is NOT encrypted (SIEM data should be protected with KMS encryption).'
+        else lg.name || ' is encrypted with KMS key ' || lg.kms_key_id || ' (protects sensitive audit data).'
       end as reason,
-      account_id
+      lg.account_id
     from
-      aws_cloudwatch_log_group
+      aws_cloudwatch_log_group as lg
+      left join exempt_log_groups as e on lg.arn = e.arn
+      left join expired_log_groups as elg on lg.arn = elg.arn
 
     union all
 
     -- Check Security Lake status (centralizes security telemetry)
+    -- Note: Security Lake is account-level service, no resource-level exemptions
     select
       arn as resource,
       case
@@ -61,21 +123,29 @@ query "ksi_mla_01_aws_check" {
 
     -- Check log buckets have access logging enabled (detect unauthorized access)
     select
-      arn as resource,
+      b.arn as resource,
       case
-        when (name like '%log%' or name like '%trail%' or name like '%audit%') and logging is null then 'alarm'
+        when eb.arn is not null then 'alarm'
+        when e.arn is not null and eb.arn is null then 'skip'
+        when (b.name like '%log%' or b.name like '%trail%' or b.name like '%audit%') and b.logging is null then 'alarm'
         else 'ok'
       end as status,
       case
-        when (name like '%log%' or name like '%trail%' or name like '%audit%') and logging is null
-          then name || ' is a log bucket WITHOUT access logging (cannot detect unauthorized access to logs).'
-        else name || ' has appropriate access logging configuration.'
+        when eb.arn is not null
+          then b.name || ' has EXPIRED exemption (expired: ' || e.exemption_expiry || ').'
+        when e.arn is not null
+          then b.name || ' is exempt.', 'Not specified')
+        when (b.name like '%log%' or b.name like '%trail%' or b.name like '%audit%') and b.logging is null
+          then b.name || ' is a log bucket WITHOUT access logging (cannot detect unauthorized access to logs).'
+        else b.name || ' has appropriate access logging configuration.'
       end as reason,
-      account_id
+      b.account_id
     from
-      aws_s3_bucket
+      aws_s3_bucket as b
+      left join exempt_buckets as e on b.arn = e.arn
+      left join expired_buckets as eb on b.arn = eb.arn
     where
-      name like '%log%' or name like '%trail%' or name like '%audit%'
+      b.name like '%log%' or b.name like '%trail%' or b.name like '%audit%'
   EOQ
 }
 
@@ -84,24 +154,47 @@ query "ksi_mla_02_aws_check" {
     -- KSI-MLA-02: Audit Logging
     -- Retain and review logs regularly
 
+    with exempt_trails as (
+      select
+        arn,
+        tags->>'${var.exemption_expiry_tag}' as exemption_expiry
+      from
+        aws_tagging_resource
+      where
+        tags->>'${var.exemption_tag_key}' is not null
+          and 'KSI-MLA-02' = any(string_to_array(tags->>'${var.exemption_tag_key}', ':'))
+        and arn like 'arn:aws:cloudtrail:%'
+    ),
+    expired_trails as (
+      select arn from exempt_trails
+      where exemption_expiry is not null and exemption_expiry::date < current_date
+    )
     -- Check CloudTrail trails have comprehensive coverage
     select
-      arn as resource,
+      t.arn as resource,
       case
-        when not (is_logging = true and is_multi_region_trail = true and include_global_service_events = true) then 'alarm'
+        when et.arn is not null then 'alarm'
+        when e.arn is not null and et.arn is null then 'skip'
+        when not (t.is_logging = true and t.is_multi_region_trail = true and t.include_global_service_events = true) then 'alarm'
         else 'ok'
       end as status,
       case
-        when not (is_logging = true and is_multi_region_trail = true and include_global_service_events = true)
-          then name || ' lacks comprehensive audit coverage: ' ||
-            case when not is_logging then 'NOT logging ' else '' end ||
-            case when not is_multi_region_trail then 'NOT multi-region ' else '' end ||
-            case when not include_global_service_events then 'NO global service events' else '' end
-        else name || ' has comprehensive audit logging (multi-region with global service events).'
+        when et.arn is not null
+          then t.name || ' has EXPIRED exemption (expired: ' || e.exemption_expiry || ').'
+        when e.arn is not null
+          then t.name || ' is exempt.', 'Not specified')
+        when not (t.is_logging = true and t.is_multi_region_trail = true and t.include_global_service_events = true)
+          then t.name || ' lacks comprehensive audit coverage: ' ||
+            case when not t.is_logging then 'NOT logging ' else '' end ||
+            case when not t.is_multi_region_trail then 'NOT multi-region ' else '' end ||
+            case when not t.include_global_service_events then 'NO global service events' else '' end
+        else t.name || ' has comprehensive audit logging (multi-region with global service events).'
       end as reason,
-      account_id
+      t.account_id
     from
-      aws_cloudtrail_trail
+      aws_cloudtrail_trail as t
+      left join exempt_trails as e on t.arn = e.arn
+      left join expired_trails as et on t.arn = et.arn
   EOQ
 }
 
@@ -151,24 +244,47 @@ query "ksi_mla_07_aws_check" {
     -- KSI-MLA-07: Event Type Coverage
     -- Log required event types comprehensively
 
+    with exempt_trails as (
+      select
+        arn,
+        tags->>'${var.exemption_expiry_tag}' as exemption_expiry
+      from
+        aws_tagging_resource
+      where
+        tags->>'${var.exemption_tag_key}' is not null
+          and 'KSI-MLA-07' = any(string_to_array(tags->>'${var.exemption_tag_key}', ':'))
+        and arn like 'arn:aws:cloudtrail:%'
+    ),
+    expired_trails as (
+      select arn from exempt_trails
+      where exemption_expiry is not null and exemption_expiry::date < current_date
+    )
     -- Check CloudTrail trails have complete event coverage
     select
-      arn as resource,
+      t.arn as resource,
       case
-        when is_multi_region_trail = false or include_global_service_events = false then 'alarm'
+        when et.arn is not null then 'alarm'
+        when e.arn is not null and et.arn is null then 'skip'
+        when t.is_multi_region_trail = false or t.include_global_service_events = false then 'alarm'
         else 'ok'
       end as status,
       case
-        when is_multi_region_trail = false or include_global_service_events = false
-          then name || ' has incomplete event coverage: ' ||
-            case when is_multi_region_trail = false then 'NOT multi-region ' else '' end ||
-            case when include_global_service_events = false then 'NO global service events' else '' end ||
+        when et.arn is not null
+          then t.name || ' has EXPIRED exemption (expired: ' || e.exemption_expiry || ').'
+        when e.arn is not null
+          then t.name || ' is exempt.', 'Not specified')
+        when t.is_multi_region_trail = false or t.include_global_service_events = false
+          then t.name || ' has incomplete event coverage: ' ||
+            case when t.is_multi_region_trail = false then 'NOT multi-region ' else '' end ||
+            case when t.include_global_service_events = false then 'NO global service events' else '' end ||
             ' (event selectors define scope; multi-region and global services required).'
-        else name || ' has complete event type coverage (multi-region with global service events).'
+        else t.name || ' has complete event type coverage (multi-region with global service events).'
       end as reason,
-      account_id
+      t.account_id
     from
-      aws_cloudtrail_trail
+      aws_cloudtrail_trail as t
+      left join exempt_trails as e on t.arn = e.arn
+      left join expired_trails as et on t.arn = et.arn
   EOQ
 }
 
@@ -177,42 +293,88 @@ query "ksi_mla_08_aws_check" {
     -- KSI-MLA-08: Log Data Access Control
     -- Restrict access to log data using least privilege
 
+    with exempt_buckets as (
+      select
+        arn,
+        tags->>'${var.exemption_expiry_tag}' as exemption_expiry
+      from
+        aws_tagging_resource
+      where
+        tags->>'${var.exemption_tag_key}' is not null
+          and 'KSI-MLA-08' = any(string_to_array(tags->>'${var.exemption_tag_key}', ':'))
+        and arn like 'arn:aws:s3:::%'
+    ),
+    expired_buckets as (
+      select arn from exempt_buckets
+      where exemption_expiry is not null and exemption_expiry::date < current_date
+    ),
+    exempt_log_groups as (
+      select
+        arn,
+        tags->>'${var.exemption_expiry_tag}' as exemption_expiry
+      from
+        aws_tagging_resource
+      where
+        tags->>'${var.exemption_tag_key}' is not null
+          and 'KSI-MLA-08' = any(string_to_array(tags->>'${var.exemption_tag_key}', ':'))
+        and arn like 'arn:aws:logs:%:log-group:%'
+    ),
+    expired_log_groups as (
+      select arn from exempt_log_groups
+      where exemption_expiry is not null and exemption_expiry::date < current_date
+    )
     -- Check log buckets don't have overly permissive ACLs
     select
-      arn as resource,
+      b.arn as resource,
       case
-        when (name like '%log%' or name like '%trail%' or name like '%audit%')
-          and (acl ->> 'Grants')::jsonb @> '[{"Permission": "FULL_CONTROL"}]' then 'alarm'
+        when eb.arn is not null then 'alarm'
+        when e.arn is not null and eb.arn is null then 'skip'
+        when (b.name like '%log%' or b.name like '%trail%' or b.name like '%audit%')
+          and (b.acl ->> 'Grants')::jsonb @> '[{"Permission": "FULL_CONTROL"}]' then 'alarm'
         else 'ok'
       end as status,
       case
-        when (name like '%log%' or name like '%trail%' or name like '%audit%')
-          and (acl ->> 'Grants')::jsonb @> '[{"Permission": "FULL_CONTROL"}]'
-          then name || ' is a log bucket with overly permissive ACLs (log buckets require strict access controls).'
-        else name || ' has appropriate access controls.'
+        when eb.arn is not null
+          then b.name || ' has EXPIRED exemption (expired: ' || e.exemption_expiry || ').'
+        when e.arn is not null
+          then b.name || ' is exempt.', 'Not specified')
+        when (b.name like '%log%' or b.name like '%trail%' or b.name like '%audit%')
+          and (b.acl ->> 'Grants')::jsonb @> '[{"Permission": "FULL_CONTROL"}]'
+          then b.name || ' is a log bucket with overly permissive ACLs (log buckets require strict access controls).'
+        else b.name || ' has appropriate access controls.'
       end as reason,
-      account_id
+      b.account_id
     from
-      aws_s3_bucket
+      aws_s3_bucket as b
+      left join exempt_buckets as e on b.arn = e.arn
+      left join expired_buckets as eb on b.arn = eb.arn
     where
-      name like '%log%' or name like '%trail%' or name like '%audit%'
+      b.name like '%log%' or b.name like '%trail%' or b.name like '%audit%'
 
     union all
 
     -- Check log groups have KMS encryption (protect log data at rest)
     select
-      arn as resource,
+      lg.arn as resource,
       case
-        when kms_key_id is null then 'alarm'
+        when elg.arn is not null then 'alarm'
+        when e.arn is not null and elg.arn is null then 'skip'
+        when lg.kms_key_id is null then 'alarm'
         else 'ok'
       end as status,
       case
-        when kms_key_id is null
-          then name || ' does NOT have KMS encryption (log data unprotected at rest).'
-        else name || ' has KMS encryption enabled (protects log data at rest).'
+        when elg.arn is not null
+          then lg.name || ' has EXPIRED exemption (expired: ' || e.exemption_expiry || ').'
+        when e.arn is not null
+          then lg.name || ' is exempt.', 'Not specified')
+        when lg.kms_key_id is null
+          then lg.name || ' does NOT have KMS encryption (log data unprotected at rest).'
+        else lg.name || ' has KMS encryption enabled (protects log data at rest).'
       end as reason,
-      account_id
+      lg.account_id
     from
-      aws_cloudwatch_log_group
+      aws_cloudwatch_log_group as lg
+      left join exempt_log_groups as e on lg.arn = e.arn
+      left join expired_log_groups as elg on lg.arn = elg.arn
   EOQ
 }

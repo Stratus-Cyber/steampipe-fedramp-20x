@@ -45,15 +45,63 @@ query "ksi_iam_01_azure_check" {
 
 query "ksi_iam_02_azure_check" {
   sql = <<-EOQ
+    with exempt_1 as (
+      select
+        id as exempt_id,
+        tags->>'${var.exemption_expiry_tag}' as exemption_expiry
+      from
+        all_azure.azure_key_vault_key
+      where
+        tags->>'${var.exemption_tag_key}' is not null
+          and 'KSI-IAM-02' = any(string_to_array(tags->>'${var.exemption_tag_key}', ':'))
+    ),
+        expired_1 as (
+      select exempt_id from exempt_1
+      where exemption_expiry is not null and exemption_expiry::date < current_date
+    ),
+        exempt_2 as (
+      select
+        id as exempt_id,
+        tags->>'${var.exemption_expiry_tag}' as exemption_expiry
+      from
+        all_azure.azure_key_vault_secret
+      where
+        tags->>'${var.exemption_tag_key}' is not null
+          and 'KSI-IAM-02' = any(string_to_array(tags->>'${var.exemption_tag_key}', ':'))
+    ),
+        expired_2 as (
+      select exempt_id from exempt_2
+      where exemption_expiry is not null and exemption_expiry::date < current_date
+    ),
+        exempt_3 as (
+      select
+        id as exempt_id,
+        tags->>'${var.exemption_expiry_tag}' as exemption_expiry
+      from
+        all_azure.azure_storage_account
+      where
+        tags->>'${var.exemption_tag_key}' is not null
+          and 'KSI-IAM-02' = any(string_to_array(tags->>'${var.exemption_tag_key}', ':'))
+    ),
+        expired_3 as (
+      select exempt_id from exempt_3
+      where exemption_expiry is not null and exemption_expiry::date < current_date
+    )
     -- Check Key Vault key expiration dates set (CIS Azure 8.1)
     select
       id as resource,
       case
+        when exp_1.exempt_id is not null then 'alarm'
+        when e_1.exempt_id is not null and exp_1.exempt_id is null then 'skip'
         when expires_at is not null and expires_at > current_timestamp then 'ok'
         when expires_at is null then 'alarm'
         else 'alarm'
       end as status,
       case
+        when exp_1.exempt_id is not null
+          then name || ' has EXPIRED exemption (expired: ' || e_1.exemption_expiry || ').'
+        when e_1.exempt_id is not null
+          then name || ' is exempt.'
         when expires_at is not null and expires_at > current_timestamp then name || ' has valid expiration date.'
         when expires_at is null then name || ' does not have an expiration date set.'
         else name || ' has expired.'
@@ -61,18 +109,28 @@ query "ksi_iam_02_azure_check" {
       subscription_id
     from
       all_azure.azure_key_vault_key
+      left join exempt_1 as e_1 on all_azure.azure_key_vault_key.id = e_1.exempt_id
+      left join expired_1 as exp_1 on all_azure.azure_key_vault_key.id = exp_1.exempt_id
+
 
     union all
+
 
     -- Check Key Vault secret expiration dates set (CIS Azure 8.2)
     select
       id as resource,
       case
+        when exp_2.exempt_id is not null then 'alarm'
+        when e_2.exempt_id is not null and exp_2.exempt_id is null then 'skip'
         when expires_at is not null and expires_at > current_timestamp then 'ok'
         when expires_at is null then 'alarm'
         else 'alarm'
       end as status,
       case
+        when exp_2.exempt_id is not null
+          then name || ' has EXPIRED exemption (expired: ' || e_2.exemption_expiry || ').'
+        when e_2.exempt_id is not null
+          then name || ' is exempt.'
         when expires_at is not null and expires_at > current_timestamp then name || ' has valid expiration date.'
         when expires_at is null then name || ' does not have an expiration date set.'
         else name || ' has expired.'
@@ -80,28 +138,82 @@ query "ksi_iam_02_azure_check" {
       subscription_id
     from
       all_azure.azure_key_vault_secret
+      left join exempt_2 as e_2 on all_azure.azure_key_vault_secret.id = e_2.exempt_id
+      left join expired_2 as exp_2 on all_azure.azure_key_vault_secret.id = exp_2.exempt_id
+
 
     union all
+
 
     -- Check storage account requires secure transfer (CIS Azure 3.1)
     select
       id as resource,
       case
+        when exp_3.exempt_id is not null then 'alarm'
+        when e_3.exempt_id is not null and exp_3.exempt_id is null then 'skip'
         when enable_https_traffic_only then 'ok'
         else 'alarm'
       end as status,
       case
+        when exp_3.exempt_id is not null
+          then name || ' has EXPIRED exemption (expired: ' || e_3.exemption_expiry || ').'
+        when e_3.exempt_id is not null
+          then name || ' is exempt.'
         when enable_https_traffic_only then name || ' requires secure transfer (HTTPS).'
         else name || ' does not require secure transfer.'
       end as reason,
       subscription_id
     from
       all_azure.azure_storage_account
+      left join exempt_3 as e_3 on all_azure.azure_storage_account.id = e_3.exempt_id
+      left join expired_3 as exp_3 on all_azure.azure_storage_account.id = exp_3.exempt_id
   EOQ
 }
 
 query "ksi_iam_03_azure_check" {
   sql = <<-EOQ
+    with exempt_1 as (
+      select
+        id as exempt_id,
+        tags->>'${var.exemption_expiry_tag}' as exemption_expiry
+      from
+        all_azure.azure_compute_virtual_machine
+      where
+        tags->>'${var.exemption_tag_key}' is not null
+          and 'KSI-IAM-03' = any(string_to_array(tags->>'${var.exemption_tag_key}', ':'))
+    ),
+        expired_1 as (
+      select exempt_id from exempt_1
+      where exemption_expiry is not null and exemption_expiry::date < current_date
+    ),
+        exempt_2 as (
+      select
+        id as exempt_id,
+        tags->>'${var.exemption_expiry_tag}' as exemption_expiry
+      from
+        all_azure.azure_sql_server
+      where
+        tags->>'${var.exemption_tag_key}' is not null
+          and 'KSI-IAM-03' = any(string_to_array(tags->>'${var.exemption_tag_key}', ':'))
+    ),
+        expired_2 as (
+      select exempt_id from exempt_2
+      where exemption_expiry is not null and exemption_expiry::date < current_date
+    ),
+        exempt_3 as (
+      select
+        id as exempt_id,
+        tags->>'${var.exemption_expiry_tag}' as exemption_expiry
+      from
+        all_azure.azure_app_service_web_app
+      where
+        tags->>'${var.exemption_tag_key}' is not null
+          and 'KSI-IAM-03' = any(string_to_array(tags->>'${var.exemption_tag_key}', ':'))
+    ),
+        expired_3 as (
+      select exempt_id from exempt_3
+      where exemption_expiry is not null and exemption_expiry::date < current_date
+    )
     -- Check service principals with password credentials
     select
       id as resource,
@@ -121,56 +233,86 @@ query "ksi_iam_03_azure_check" {
     where
       account_enabled = true
 
+
     union all
+
 
     -- Check managed identities used for Azure resources (best practice)
     select
       id as resource,
       case
+        when exp_1.exempt_id is not null then 'alarm'
+        when e_1.exempt_id is not null and exp_1.exempt_id is null then 'skip'
         when identity is not null and identity ->> 'type' in ('SystemAssigned', 'UserAssigned', 'SystemAssigned, UserAssigned') then 'ok'
         else 'info'
       end as status,
       case
+        when exp_1.exempt_id is not null
+          then name || ' has EXPIRED exemption (expired: ' || e_1.exemption_expiry || ').'
+        when e_1.exempt_id is not null
+          then name || ' is exempt.'
         when identity is not null and identity ->> 'type' in ('SystemAssigned', 'UserAssigned', 'SystemAssigned, UserAssigned') then name || ' uses managed identity.'
         else name || ' does not use managed identity (consider enabling).'
       end as reason,
       subscription_id
     from
       all_azure.azure_compute_virtual_machine
+      left join exempt_1 as e_1 on all_azure.azure_compute_virtual_machine.id = e_1.exempt_id
+      left join expired_1 as exp_1 on all_azure.azure_compute_virtual_machine.id = exp_1.exempt_id
+
 
     union all
+
 
     -- Check SQL Server uses Azure AD authentication (CIS Azure 4.1.1)
     select
       id as resource,
       case
+        when exp_2.exempt_id is not null then 'alarm'
+        when e_2.exempt_id is not null and exp_2.exempt_id is null then 'skip'
         when administrator_login_password is null then 'ok'
         else 'info'
       end as status,
       case
+        when exp_2.exempt_id is not null
+          then name || ' has EXPIRED exemption (expired: ' || e_2.exemption_expiry || ').'
+        when e_2.exempt_id is not null
+          then name || ' is exempt.'
         when administrator_login_password is null then name || ' may be using Azure AD authentication.'
         else name || ' uses SQL authentication (consider Azure AD).'
       end as reason,
       subscription_id
     from
       all_azure.azure_sql_server
+      left join exempt_2 as e_2 on all_azure.azure_sql_server.id = e_2.exempt_id
+      left join expired_2 as exp_2 on all_azure.azure_sql_server.id = exp_2.exempt_id
+
 
     union all
+
 
     -- Check App Service uses managed identity (CIS Azure 9.1)
     select
       id as resource,
       case
+        when exp_3.exempt_id is not null then 'alarm'
+        when e_3.exempt_id is not null and exp_3.exempt_id is null then 'skip'
         when identity is not null and identity ->> 'type' in ('SystemAssigned', 'UserAssigned', 'SystemAssigned, UserAssigned') then 'ok'
         else 'alarm'
       end as status,
       case
+        when exp_3.exempt_id is not null
+          then name || ' has EXPIRED exemption (expired: ' || e_3.exemption_expiry || ').'
+        when e_3.exempt_id is not null
+          then name || ' is exempt.'
         when identity is not null and identity ->> 'type' in ('SystemAssigned', 'UserAssigned', 'SystemAssigned, UserAssigned') then name || ' uses managed identity.'
         else name || ' does not use managed identity.'
       end as reason,
       subscription_id
     from
       all_azure.azure_app_service_web_app
+      left join exempt_3 as e_3 on all_azure.azure_app_service_web_app.id = e_3.exempt_id
+      left join expired_3 as exp_3 on all_azure.azure_app_service_web_app.id = exp_3.exempt_id
   EOQ
 }
 

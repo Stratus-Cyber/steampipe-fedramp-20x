@@ -158,4 +158,65 @@ dashboard "fedramp_20x_azure_overview" {
       EOQ
     }
   }
+
+  container {
+    card {
+      title = "Exempt Resources"
+      width = 6
+      type  = "info"
+      sql   = <<-EOQ
+        select count(*) as total
+        from azure_resource
+        where tags->>'${var.exemption_tag_key}' is not null
+      EOQ
+    }
+
+    card {
+      title = "Expired Exemptions"
+      width = 6
+      type  = "alert"
+      sql   = <<-EOQ
+        select count(*) as total
+        from azure_resource
+        where tags->>'${var.exemption_tag_key}' is not null
+          and tags->>'${var.exemption_expiry_tag}' is not null
+          and (tags->>'${var.exemption_expiry_tag}')::date < current_date
+      EOQ
+    }
+  }
+
+  container {
+    table {
+      title = "Azure Exempt Resources"
+      width = 12
+      sql   = <<-EOQ
+        select
+          id as resource,
+          type as resource_type,
+          name,
+          tags->>'${var.exemption_tag_key}' as exempt_controls,
+          tags->>'${var.exemption_expiry_tag}' as exemption_expiry,
+          case
+            when tags->>'${var.exemption_expiry_tag}' is not null
+              and (tags->>'${var.exemption_expiry_tag}')::date < current_date
+              then 'Expired'
+            else 'Active'
+          end as exemption_status,
+          subscription_id,
+          resource_group
+        from
+          azure_resource
+        where
+          tags->>'${var.exemption_tag_key}' is not null
+        order by
+          case
+            when tags->>'${var.exemption_expiry_tag}' is not null
+              and (tags->>'${var.exemption_expiry_tag}')::date < current_date then 1
+            else 2
+          end,
+          type,
+          name
+      EOQ
+    }
+  }
 }

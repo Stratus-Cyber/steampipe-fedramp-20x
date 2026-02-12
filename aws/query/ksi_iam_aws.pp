@@ -6,20 +6,42 @@ query "ksi_iam_01_aws_check" {
     -- Require MFA using phishing-resistant methods (FIDO2, hardware tokens)
     -- Note: Virtual MFA (TOTP) is NOT phishing-resistant per FedRAMP 20x
 
+    with exempt_users as (
+      select
+        arn,
+        tags->>'${var.exemption_expiry_tag}' as exemption_expiry
+      from
+        aws_iam_user
+      where
+        tags->>'${var.exemption_tag_key}' is not null
+          and 'KSI-IAM-01' = any(string_to_array(tags->>'${var.exemption_tag_key}', ':'))
+    ),
+    expired_exemptions as (
+      select arn from exempt_users
+      where exemption_expiry is not null and exemption_expiry::date < current_date
+    )
     -- Check IAM users without any MFA enabled
     select
-      arn as resource,
+      u.arn as resource,
       case
-        when mfa_enabled = false then 'alarm'
+        when ee.arn is not null then 'alarm'
+        when e.arn is not null and ee.arn is null then 'skip'
+        when u.mfa_enabled = false then 'alarm'
         else 'ok'
       end as status,
       case
-        when mfa_enabled = false then name || ' does NOT have MFA enabled (high risk).'
-        else name || ' has MFA enabled.'
+        when ee.arn is not null
+          then u.name || ' has EXPIRED exemption (expired: ' || e.exemption_expiry || '). MFA required.'
+        when e.arn is not null
+          then u.name || ' is exempt from MFA requirement.'
+        when u.mfa_enabled = false then u.name || ' does NOT have MFA enabled (high risk).'
+        else u.name || ' has MFA enabled.'
       end as reason,
-      account_id
+      u.account_id
     from
-      aws_iam_user
+      aws_iam_user as u
+      left join exempt_users as e on u.arn = e.arn
+      left join expired_exemptions as ee on u.arn = ee.arn
 
     union all
 
@@ -64,7 +86,22 @@ query "ksi_iam_02_aws_check" {
     -- Use secure passwordless methods when feasible, otherwise enforce strong passwords with MFA
     -- Note: AWS best practice is to use SSO/federated identities instead of IAM user passwords
 
+    with exempt_users as (
+      select
+        arn,
+        tags->>'${var.exemption_expiry_tag}' as exemption_expiry
+      from
+        aws_iam_user
+      where
+        tags->>'${var.exemption_tag_key}' is not null
+          and 'KSI-IAM-02' = any(string_to_array(tags->>'${var.exemption_tag_key}', ':'))
+    ),
+    expired_exemptions as (
+      select arn from exempt_users
+      where exemption_expiry is not null and exemption_expiry::date < current_date
+    )
     -- Check IAM password policy minimum length
+    -- Note: Account-level policy, no exemptions
     select
       'arn:aws:iam::' || account_id || ':account-password-policy' as resource,
       case
@@ -86,6 +123,7 @@ query "ksi_iam_02_aws_check" {
     union all
 
     -- Check IAM password reuse prevention
+    -- Note: Account-level policy, no exemptions
     select
       'arn:aws:iam::' || account_id || ':account-password-policy' as resource,
       case
@@ -108,22 +146,30 @@ query "ksi_iam_02_aws_check" {
 
     -- Check for users with passwords over 90 days old
     select
-      arn as resource,
+      u.arn as resource,
       case
-        when login_profile is null then 'ok'
-        when password_last_used > (current_date - interval '90 days') then 'ok'
+        when ee.arn is not null then 'alarm'
+        when e.arn is not null and ee.arn is null then 'skip'
+        when u.login_profile is null then 'ok'
+        when u.password_last_used > (current_date - interval '90 days') then 'ok'
         else 'alarm'
       end as status,
       case
-        when login_profile is null
-          then name || ' does not have a password (uses SSO/federation, preferred method).'
-        when password_last_used > (current_date - interval '90 days')
-          then name || ' password is within 90-day rotation period.'
-        else name || ' password is over 90 days old (should be rotated).'
+        when ee.arn is not null
+          then u.name || ' has EXPIRED exemption (expired: ' || e.exemption_expiry || ').'
+        when e.arn is not null
+          then u.name || ' is exempt.'
+        when u.login_profile is null
+          then u.name || ' does not have a password (uses SSO/federation, preferred method).'
+        when u.password_last_used > (current_date - interval '90 days')
+          then u.name || ' password is within 90-day rotation period.'
+        else u.name || ' password is over 90 days old (should be rotated).'
       end as reason,
-      account_id
+      u.account_id
     from
-      aws_iam_user
+      aws_iam_user as u
+      left join exempt_users as e on u.arn = e.arn
+      left join expired_exemptions as ee on u.arn = ee.arn
   EOQ
 }
 
@@ -132,52 +178,112 @@ query "ksi_iam_03_aws_check" {
     -- KSI-IAM-03: Non-User Account Security
     -- Secure service accounts and machine identities
 
+    with exempt_roles as (
+      select
+        arn,
+        tags->>'${var.exemption_expiry_tag}' as exemption_expiry
+      from
+        aws_iam_role
+      where
+        tags->>'${var.exemption_tag_key}' is not null
+          and 'KSI-IAM-03' = any(string_to_array(tags->>'${var.exemption_tag_key}', ':'))
+    ),
+    expired_roles as (
+      select arn from exempt_roles
+      where exemption_expiry is not null and exemption_expiry::date < current_date
+    ),
+    exempt_users as (
+      select
+        arn,
+        name,
+        tags->>'${var.exemption_expiry_tag}' as exemption_expiry
+      from
+        aws_iam_user
+      where
+        tags->>'${var.exemption_tag_key}' is not null
+          and 'KSI-IAM-03' = any(string_to_array(tags->>'${var.exemption_tag_key}', ':'))
+    ),
+    expired_users as (
+      select arn from exempt_users
+      where exemption_expiry is not null and exemption_expiry::date < current_date
+    ),
+    exempt_instances as (
+      select
+        arn,
+        tags->>'${var.exemption_expiry_tag}' as exemption_expiry
+      from
+        aws_ec2_instance
+      where
+        tags->>'${var.exemption_tag_key}' is not null
+          and 'KSI-IAM-03' = any(string_to_array(tags->>'${var.exemption_tag_key}', ':'))
+    ),
+    expired_instances as (
+      select arn from exempt_instances
+      where exemption_expiry is not null and exemption_expiry::date < current_date
+    )
     -- Check IAM roles without condition constraints on assume role
     select
-      arn as resource,
+      r.arn as resource,
       case
-        when path not like '/aws-service-role/%'
-          and assume_role_policy_document::text like '%sts:AssumeRole%'
-          and assume_role_policy_document::text not like '%Condition%' then 'alarm'
+        when er.arn is not null then 'alarm'
+        when e.arn is not null and er.arn is null then 'skip'
+        when r.path not like '/aws-service-role/%'
+          and r.assume_role_policy_document::text like '%sts:AssumeRole%'
+          and r.assume_role_policy_document::text not like '%Condition%' then 'alarm'
         else 'ok'
       end as status,
       case
-        when path not like '/aws-service-role/%'
-          and assume_role_policy_document::text like '%sts:AssumeRole%'
-          and assume_role_policy_document::text not like '%Condition%'
-          then name || ' has assume role policy WITHOUT condition constraints (overly permissive).'
-        else name || ' has appropriate assume role constraints.'
+        when er.arn is not null
+          then r.name || ' has EXPIRED exemption (expired: ' || e.exemption_expiry || ').'
+        when e.arn is not null
+          then r.name || ' is exempt.'
+        when r.path not like '/aws-service-role/%'
+          and r.assume_role_policy_document::text like '%sts:AssumeRole%'
+          and r.assume_role_policy_document::text not like '%Condition%'
+          then r.name || ' has assume role policy WITHOUT condition constraints (overly permissive).'
+        else r.name || ' has appropriate assume role constraints.'
       end as reason,
-      account_id
+      r.account_id
     from
-      aws_iam_role
+      aws_iam_role as r
+      left join exempt_roles as e on r.arn = e.arn
+      left join expired_roles as er on r.arn = er.arn
     where
-      path not like '/aws-service-role/%'
+      r.path not like '/aws-service-role/%'
 
     union all
 
     -- Check active access keys older than 90 days (long-lived keys = risk)
     select
-      'arn:aws:iam::' || account_id || ':user/' || user_name || '/access-key/' || access_key_id as resource,
+      'arn:aws:iam::' || k.account_id || ':user/' || k.user_name || '/access-key/' || k.access_key_id as resource,
       case
-        when status = 'Active' and create_date < now() - interval '90 days' then 'alarm'
+        when eu.arn is not null then 'alarm'
+        when e.arn is not null and eu.arn is null then 'skip'
+        when k.status = 'Active' and k.create_date < now() - interval '90 days' then 'alarm'
         else 'ok'
       end as status,
       case
-        when status = 'Active' and create_date < now() - interval '90 days'
-          then user_name || ' access key ' || access_key_id || ' is ' ||
-            extract(day from now() - create_date)::int || ' days old (exceeds 90 days, should be rotated or replaced with roles).'
-        else user_name || ' access key ' || access_key_id || ' is within rotation period.'
+        when eu.arn is not null
+          then k.user_name || ' has EXPIRED exemption (expired: ' || e.exemption_expiry || ').'
+        when e.arn is not null
+          then k.user_name || ' access key is exempt.'
+        when k.status = 'Active' and k.create_date < now() - interval '90 days'
+          then k.user_name || ' access key ' || k.access_key_id || ' is ' ||
+            extract(day from now() - k.create_date)::int || ' days old (exceeds 90 days, should be rotated or replaced with roles).'
+        else k.user_name || ' access key ' || k.access_key_id || ' is within rotation period.'
       end as reason,
-      account_id
+      k.account_id
     from
-      aws_iam_access_key
+      aws_iam_access_key as k
+      left join exempt_users as e on e.name = k.user_name
+      left join expired_users as eu on eu.arn = e.arn
     where
-      status = 'Active'
+      k.status = 'Active'
 
     union all
 
     -- Check for unused instance profiles (should be cleaned up)
+    -- Note: Instance profiles not taggable, no exemptions
     select
       ip.arn as resource,
       'info' as status,
@@ -195,21 +301,29 @@ query "ksi_iam_03_aws_check" {
 
     -- Check EC2 instances without managed identity (may use embedded credentials)
     select
-      arn as resource,
+      i.arn as resource,
       case
-        when iam_instance_profile_arn is null then 'alarm'
+        when ei.arn is not null then 'alarm'
+        when e.arn is not null and ei.arn is null then 'skip'
+        when i.iam_instance_profile_arn is null then 'alarm'
         else 'ok'
       end as status,
       case
-        when iam_instance_profile_arn is null
-          then instance_id || ' does NOT have instance profile (may be using embedded credentials).'
-        else instance_id || ' has instance profile ' || iam_instance_profile_arn || ' (using managed identity).'
+        when ei.arn is not null
+          then i.instance_id || ' has EXPIRED exemption (expired: ' || e.exemption_expiry || ').'
+        when e.arn is not null
+          then i.instance_id || ' is exempt.'
+        when i.iam_instance_profile_arn is null
+          then i.instance_id || ' does NOT have instance profile (may be using embedded credentials).'
+        else i.instance_id || ' has instance profile ' || i.iam_instance_profile_arn || ' (using managed identity).'
       end as reason,
-      account_id
+      i.account_id
     from
-      aws_ec2_instance
+      aws_ec2_instance as i
+      left join exempt_instances as e on i.arn = e.arn
+      left join expired_instances as ei on i.arn = ei.arn
     where
-      instance_state = 'running'
+      i.instance_state = 'running'
   EOQ
 }
 
@@ -218,61 +332,127 @@ query "ksi_iam_05_aws_check" {
     -- KSI-IAM-05: Least Privilege
     -- Ensure permissions are scoped to minimum necessary
 
+    with exempt_policies as (
+      select
+        arn,
+        tags->>'${var.exemption_expiry_tag}' as exemption_expiry
+      from
+        aws_iam_policy
+      where
+        tags->>'${var.exemption_tag_key}' is not null
+          and 'KSI-IAM-05' = any(string_to_array(tags->>'${var.exemption_tag_key}', ':'))
+    ),
+    expired_policies as (
+      select arn from exempt_policies
+      where exemption_expiry is not null and exemption_expiry::date < current_date
+    ),
+    exempt_users as (
+      select
+        arn,
+        tags->>'${var.exemption_expiry_tag}' as exemption_expiry
+      from
+        aws_iam_user
+      where
+        tags->>'${var.exemption_tag_key}' is not null
+          and 'KSI-IAM-05' = any(string_to_array(tags->>'${var.exemption_tag_key}', ':'))
+    ),
+    expired_users as (
+      select arn from exempt_users
+      where exemption_expiry is not null and exemption_expiry::date < current_date
+    ),
+    exempt_roles as (
+      select
+        arn,
+        tags->>'${var.exemption_expiry_tag}' as exemption_expiry
+      from
+        aws_iam_role
+      where
+        tags->>'${var.exemption_tag_key}' is not null
+          and 'KSI-IAM-05' = any(string_to_array(tags->>'${var.exemption_tag_key}', ':'))
+    ),
+    expired_roles as (
+      select arn from exempt_roles
+      where exemption_expiry is not null and exemption_expiry::date < current_date
+    )
     -- Check customer-managed policies with wildcard actions
     select
-      arn as resource,
+      p.arn as resource,
       case
-        when is_aws_managed = false and policy_std::text like '%"Action": "*"%' then 'alarm'
+        when ep.arn is not null then 'alarm'
+        when e.arn is not null and ep.arn is null then 'skip'
+        when p.is_aws_managed = false and p.policy_std::text like '%"Action": "*"%' then 'alarm'
         else 'ok'
       end as status,
       case
-        when is_aws_managed = false and policy_std::text like '%"Action": "*"%'
-          then name || ' is a customer-managed policy with wildcard actions (violates least privilege).'
-        else name || ' follows least privilege principles.'
+        when ep.arn is not null
+          then p.name || ' has EXPIRED exemption (expired: ' || e.exemption_expiry || ').'
+        when e.arn is not null
+          then p.name || ' is exempt.'
+        when p.is_aws_managed = false and p.policy_std::text like '%"Action": "*"%'
+          then p.name || ' is a customer-managed policy with wildcard actions (violates least privilege).'
+        else p.name || ' follows least privilege principles.'
       end as reason,
-      account_id
+      p.account_id
     from
-      aws_iam_policy
+      aws_iam_policy as p
+      left join exempt_policies as e on p.arn = e.arn
+      left join expired_policies as ep on p.arn = ep.arn
     where
-      is_aws_managed = false and attachment_count > 0
+      p.is_aws_managed = false and p.attachment_count > 0
 
     union all
 
     -- Check users with AdministratorAccess policy
     select
-      arn as resource,
+      u.arn as resource,
       case
-        when attached_policy_arns::text like '%AdministratorAccess%' then 'alarm'
+        when eu.arn is not null then 'alarm'
+        when e.arn is not null and eu.arn is null then 'skip'
+        when u.attached_policy_arns::text like '%AdministratorAccess%' then 'alarm'
         else 'ok'
       end as status,
       case
-        when attached_policy_arns::text like '%AdministratorAccess%'
-          then name || ' has AdministratorAccess policy attached (should be restricted to break-glass accounts only).'
-        else name || ' does not have administrator access.'
+        when eu.arn is not null
+          then u.name || ' has EXPIRED exemption (expired: ' || e.exemption_expiry || ').'
+        when e.arn is not null
+          then u.name || ' is exempt.'
+        when u.attached_policy_arns::text like '%AdministratorAccess%'
+          then u.name || ' has AdministratorAccess policy attached (should be restricted to break-glass accounts only).'
+        else u.name || ' does not have administrator access.'
       end as reason,
-      account_id
+      u.account_id
     from
-      aws_iam_user
+      aws_iam_user as u
+      left join exempt_users as e on u.arn = e.arn
+      left join expired_users as eu on u.arn = eu.arn
 
     union all
 
     -- Check roles with AdministratorAccess (excluding AWS service roles)
     select
-      arn as resource,
+      r.arn as resource,
       case
-        when attached_policy_arns::text like '%AdministratorAccess%' and path not like '/aws-service-role/%' then 'alarm'
+        when er.arn is not null then 'alarm'
+        when e.arn is not null and er.arn is null then 'skip'
+        when r.attached_policy_arns::text like '%AdministratorAccess%' and r.path not like '/aws-service-role/%' then 'alarm'
         else 'ok'
       end as status,
       case
-        when attached_policy_arns::text like '%AdministratorAccess%' and path not like '/aws-service-role/%'
-          then name || ' has AdministratorAccess policy (admin roles should be limited and justified).'
-        else name || ' does not have administrator access.'
+        when er.arn is not null
+          then r.name || ' has EXPIRED exemption (expired: ' || e.exemption_expiry || ').'
+        when e.arn is not null
+          then r.name || ' is exempt.'
+        when r.attached_policy_arns::text like '%AdministratorAccess%' and r.path not like '/aws-service-role/%'
+          then r.name || ' has AdministratorAccess policy (admin roles should be limited and justified).'
+        else r.name || ' does not have administrator access.'
       end as reason,
-      account_id
+      r.account_id
     from
-      aws_iam_role
+      aws_iam_role as r
+      left join exempt_roles as e on r.arn = e.arn
+      left join expired_roles as er on r.arn = er.arn
     where
-      path not like '/aws-service-role/%'
+      r.path not like '/aws-service-role/%'
   EOQ
 }
 
@@ -327,49 +507,81 @@ query "ksi_iam_07_aws_check" {
     -- KSI-IAM-07: Automated Account Management
     -- Automate account lifecycle management
 
+    with exempt_users as (
+      select
+        arn,
+        name,
+        tags->>'${var.exemption_expiry_tag}' as exemption_expiry
+      from
+        aws_iam_user
+      where
+        tags->>'${var.exemption_tag_key}' is not null
+          and 'KSI-IAM-07' = any(string_to_array(tags->>'${var.exemption_tag_key}', ':'))
+    ),
+    expired_users as (
+      select arn from exempt_users
+      where exemption_expiry is not null and exemption_expiry::date < current_date
+    )
     -- Check for stale users not logged in for 90+ days
     select
-      arn as resource,
+      u.arn as resource,
       case
-        when password_last_used < now() - interval '90 days' or password_last_used is null then 'alarm'
+        when eu.arn is not null then 'alarm'
+        when e.arn is not null and eu.arn is null then 'skip'
+        when u.password_last_used < now() - interval '90 days' or u.password_last_used is null then 'alarm'
         else 'ok'
       end as status,
       case
-        when password_last_used < now() - interval '90 days'
-          then name || ' has not logged in for ' || extract(day from now() - password_last_used)::int ||
+        when eu.arn is not null
+          then u.name || ' has EXPIRED exemption (expired: ' || e.exemption_expiry || ').'
+        when e.arn is not null
+          then u.name || ' is exempt.'
+        when u.password_last_used < now() - interval '90 days'
+          then u.name || ' has not logged in for ' || extract(day from now() - u.password_last_used)::int ||
             ' days (stale account, should be disabled automatically).'
-        when password_last_used is null
-          then name || ' has NEVER logged in (stale account, should be disabled automatically).'
-        else name || ' account is active.'
+        when u.password_last_used is null
+          then u.name || ' has NEVER logged in (stale account, should be disabled automatically).'
+        else u.name || ' account is active.'
       end as reason,
-      account_id
+      u.account_id
     from
-      aws_iam_user
+      aws_iam_user as u
+      left join exempt_users as e on u.arn = e.arn
+      left join expired_users as eu on u.arn = eu.arn
 
     union all
 
     -- Check access keys not rotated in 90+ days
     select
-      'arn:aws:iam::' || account_id || ':user/' || user_name || '/access-key/' || access_key_id as resource,
+      'arn:aws:iam::' || k.account_id || ':user/' || k.user_name || '/access-key/' || k.access_key_id as resource,
       case
-        when status = 'Active' and create_date < now() - interval '90 days' then 'alarm'
+        when eu.arn is not null then 'alarm'
+        when e.arn is not null and eu.arn is null then 'skip'
+        when k.status = 'Active' and k.create_date < now() - interval '90 days' then 'alarm'
         else 'ok'
       end as status,
       case
-        when status = 'Active' and create_date < now() - interval '90 days'
-          then user_name || ' access key ' || access_key_id || ' has not been rotated in ' ||
-            extract(day from now() - create_date)::int || ' days (key rotation should be automated).'
-        else user_name || ' access key ' || access_key_id || ' is within rotation period.'
+        when eu.arn is not null
+          then k.user_name || ' has EXPIRED exemption (expired: ' || e.exemption_expiry || ').'
+        when e.arn is not null
+          then k.user_name || ' access key is exempt.'
+        when k.status = 'Active' and k.create_date < now() - interval '90 days'
+          then k.user_name || ' access key ' || k.access_key_id || ' has not been rotated in ' ||
+            extract(day from now() - k.create_date)::int || ' days (key rotation should be automated).'
+        else k.user_name || ' access key ' || k.access_key_id || ' is within rotation period.'
       end as reason,
-      account_id
+      k.account_id
     from
-      aws_iam_access_key
+      aws_iam_access_key as k
+      left join exempt_users as e on e.name = k.user_name
+      left join expired_users as eu on eu.arn = e.arn
     where
-      status = 'Active'
+      k.status = 'Active'
 
     union all
 
     -- Check SSO instances have identity store configured (enables automated provisioning/deprovisioning)
+    -- Note: SSO instances are account-level, no exemptions
     select
       instance_arn as resource,
       case

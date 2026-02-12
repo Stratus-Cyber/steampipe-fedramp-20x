@@ -158,4 +158,64 @@ dashboard "fedramp_20x_aws_overview" {
       EOQ
     }
   }
+
+  container {
+    card {
+      title = "Exempt Resources"
+      width = 6
+      type  = "info"
+      sql   = <<-EOQ
+        select count(*) as total
+        from aws_tagging_resource
+        where tags->>'${var.exemption_tag_key}' is not null
+      EOQ
+    }
+
+    card {
+      title = "Expired Exemptions"
+      width = 6
+      type  = "alert"
+      sql   = <<-EOQ
+        select count(*) as total
+        from aws_tagging_resource
+        where tags->>'${var.exemption_tag_key}' is not null
+          and tags->>'${var.exemption_expiry_tag}' is not null
+          and (tags->>'${var.exemption_expiry_tag}')::date < current_date
+      EOQ
+    }
+  }
+
+  container {
+    table {
+      title = "AWS Exempt Resources"
+      width = 12
+      sql   = <<-EOQ
+        select
+          arn as resource,
+          resource_type,
+          tags->>'${var.exemption_tag_key}' as exempt_controls,
+          tags->>'${var.exemption_expiry_tag}' as exemption_expiry,
+          case
+            when tags->>'${var.exemption_expiry_tag}' is not null
+              and (tags->>'${var.exemption_expiry_tag}')::date < current_date
+              then 'Expired'
+            else 'Active'
+          end as exemption_status,
+          account_id,
+          region
+        from
+          aws_tagging_resource
+        where
+          tags->>'${var.exemption_tag_key}' is not null
+        order by
+          case
+            when tags->>'${var.exemption_expiry_tag}' is not null
+              and (tags->>'${var.exemption_expiry_tag}')::date < current_date then 1
+            else 2
+          end,
+          resource_type,
+          arn
+      EOQ
+    }
+  }
 }
