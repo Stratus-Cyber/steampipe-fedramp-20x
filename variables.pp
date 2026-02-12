@@ -2,16 +2,19 @@
 
 # Exemption Tag Configuration
 # Resources with the exemption tag will be excluded from specific compliance controls
-# The tag VALUE contains a colon-separated list of KSI control IDs to exempt
-# Example: fedramp20x_exempt = "KSI-IAM-01:KSI-CNA-02"
+# The tag VALUE contains a colon-separated list of KSI IDs to exempt
+# Supports parent (KSI-IAM-01) and sub-control (KSI-IAM-01.1) granularity
+# Example: fedramp20x_exempt = "KSI-IAM-01.1:KSI-CNA-02"
 
 # Primary exemption tag (OPTIONAL - only add to resources that need exemption)
-# Value = colon-separated list of control IDs the resource is exempt from
-# Example: fedramp20x_exempt = "KSI-IAM-01"
-# Example: fedramp20x_exempt = "KSI-IAM-01:KSI-CNA-02:KSI-SVC-06"
+# Value = colon-separated list of KSI IDs the resource is exempt from
+# Supports both parent-level and sub-control-level exemptions:
+#   Parent-level:      fedramp20x_exempt = "KSI-IAM-01"          (exempts from ALL IAM-01 sub-controls)
+#   Sub-control-level: fedramp20x_exempt = "KSI-IAM-01.1"        (exempts from ONLY the 01.1 sub-control)
+#   Mixed:             fedramp20x_exempt = "KSI-IAM-01.1:KSI-CNA-02:KSI-SVC-06.1"
 variable "exemption_tag_key" {
   type        = string
-  description = "Tag key used to identify resources exempt from specific compliance controls. Value must be a colon-separated list of KSI control IDs (e.g., 'KSI-IAM-01:KSI-CNA-02'). The fedramp20x_exempt_reason tag is optional for documentation."
+  description = "Tag key used to identify resources exempt from specific compliance controls. Value must be a colon-separated list of KSI IDs. Supports parent-level (e.g., 'KSI-IAM-01') to exempt from all sub-controls, or sub-control-level (e.g., 'KSI-IAM-01.1') for granular exemptions."
   default     = "fedramp20x_exempt"
 }
 
