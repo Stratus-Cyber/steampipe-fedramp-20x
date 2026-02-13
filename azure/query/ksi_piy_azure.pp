@@ -1,5 +1,5 @@
 # KSI-PIY: Policy and Inventory Queries - Azure
-# Updated for Turbot Pipes workspace schema (all_azure.*)
+# Updated for Turbot Pipes workspace schema (azure.*)
 
 query "ksi_piy_01_1_azure_check" {
   sql = <<-EOQ
@@ -15,7 +15,7 @@ query "ksi_piy_01_1_azure_check" {
           'Subscription has ' || count(*) || ' resources inventoried via Azure Resource Graph.' as reason,
           subscription_id
         from
-          all_azure.azure_resource
+          azure.azure_resource
         group by
           subscription_id
   EOQ
@@ -34,7 +34,7 @@ query "ksi_piy_01_2_azure_check" {
           'Subscription has ' || count(*) || ' Azure Policy assignments for governance and inventory control.' as reason,
           subscription_id
         from
-          all_azure.azure_policy_assignment
+          azure.azure_policy_assignment
         group by
           subscription_id
   EOQ
@@ -55,7 +55,7 @@ query "ksi_piy_01_3_azure_check" {
           end as reason,
           tenant_id
         from
-          all_azure.azure_management_group
+          azure.azure_management_group
         limit 10
   EOQ
 }

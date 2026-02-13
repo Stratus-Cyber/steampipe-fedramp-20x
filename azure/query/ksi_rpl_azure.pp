@@ -1,5 +1,5 @@
 # KSI-RPL: Recovery Planning Queries - Azure
-# Updated for Turbot Pipes workspace schema (all_azure.*)
+# Updated for Turbot Pipes workspace schema (azure.*)
 
 query "ksi_rpl_01_1_azure_check" {
   sql = <<-EOQ
@@ -9,7 +9,7 @@ query "ksi_rpl_01_1_azure_check" {
             tags->>'${var.exemption_expiry_tag}' as exemption_expiry,
             tags->>'${var.exemption_reason_key}' as exemption_reason
           from
-            all_azure.azure_sql_database
+            azure.azure_sql_database
           where
             tags->>'${var.exemption_tag_key}' is not null
               and ('KSI-RPL-01' = any(string_to_array(tags->>'${var.exemption_tag_key}', ':'))
@@ -26,9 +26,9 @@ query "ksi_rpl_01_1_azure_check" {
           name || ' has backup retention configured by default.' as reason,
           subscription_id
         from
-          all_azure.azure_sql_database
-          left join exempt_1 as e_1 on all_azure.azure_sql_database.id = e_1.exempt_id
-          left join expired_1 as exp_1 on all_azure.azure_sql_database.id = exp_1.exempt_id
+          azure.azure_sql_database
+          left join exempt_1 as e_1 on azure.azure_sql_database.id = e_1.exempt_id
+          left join expired_1 as exp_1 on azure.azure_sql_database.id = exp_1.exempt_id
         where
           name != 'master'
   EOQ
@@ -42,7 +42,7 @@ query "ksi_rpl_01_2_azure_check" {
             tags->>'${var.exemption_expiry_tag}' as exemption_expiry,
             tags->>'${var.exemption_reason_key}' as exemption_reason
           from
-            all_azure.azure_storage_account
+            azure.azure_storage_account
           where
             tags->>'${var.exemption_tag_key}' is not null
               and ('KSI-RPL-01' = any(string_to_array(tags->>'${var.exemption_tag_key}', ':'))
@@ -73,9 +73,9 @@ query "ksi_rpl_01_2_azure_check" {
           end as reason,
           subscription_id
         from
-          all_azure.azure_storage_account
-          left join exempt_2 as e_2 on all_azure.azure_storage_account.id = e_2.exempt_id
-          left join expired_2 as exp_2 on all_azure.azure_storage_account.id = exp_2.exempt_id
+          azure.azure_storage_account
+          left join exempt_2 as e_2 on azure.azure_storage_account.id = e_2.exempt_id
+          left join expired_2 as exp_2 on azure.azure_storage_account.id = exp_2.exempt_id
   EOQ
 }
 
@@ -91,7 +91,7 @@ query "ksi_rpl_01_3_azure_check" {
           'Subscription has ' || count(*) || ' Azure Site Recovery vaults for disaster recovery.' as reason,
           subscription_id
         from
-          all_azure.azure_recovery_services_vault
+          azure.azure_recovery_services_vault
         group by
           subscription_id
   EOQ

@@ -671,7 +671,7 @@ query "ksi_cna_03_4_aws_check" {
           left join exempt_vpcs as e on v.arn = e.arn
           left join expired_vpcs as ev on v.arn = ev.arn
         group by
-          ep.vpc_id, ep.region, ev.arn, e.arn, e.exemption_expiry
+          ep.vpc_id, ep.region, ev.arn, e.arn, e.exemption_expiry, e.exemption_reason
   EOQ
 }
 
@@ -1124,7 +1124,7 @@ query "ksi_cna_07_1_aws_check" {
           case
             when er.arn is not null then 'alarm'
             when e.arn is not null and er.arn is null then 'skip'
-            when c.compliance_status = 'NON_COMPLIANT' and c.source ->> 'Owner' = 'AWS' then 'alarm'
+            when c.compliance_by_config_rule -> 'Compliance' ->> 'ComplianceType' = 'NON_COMPLIANT' and c.source ->> 'Owner' = 'AWS' then 'alarm'
             else 'ok'
           end as status,
           case
@@ -1132,7 +1132,7 @@ query "ksi_cna_07_1_aws_check" {
               then c.name || ' has EXPIRED exemption (expired: ' || e.exemption_expiry || ').' || coalesce(' Reason: ' || e.exemption_reason || '.', '')
             when e.arn is not null
               then c.name || ' is exempt.' || coalesce(' Reason: ' || e.exemption_reason || '.', '')
-            when c.compliance_status = 'NON_COMPLIANT' and c.source ->> 'Owner' = 'AWS'
+            when c.compliance_by_config_rule -> 'Compliance' ->> 'ComplianceType' = 'NON_COMPLIANT' and c.source ->> 'Owner' = 'AWS'
               then 'AWS managed Config rule ' || c.name || ' is NON_COMPLIANT (violates AWS best practices).'
             else 'AWS managed Config rule ' || c.name || ' is compliant.'
           end as reason,
@@ -1170,7 +1170,7 @@ query "ksi_cna_07_2_aws_check" {
           case
             when er.arn is not null then 'alarm'
             when e.arn is not null and er.arn is null then 'skip'
-            when c.compliance_status = 'NON_COMPLIANT' then 'alarm'
+            when c.compliance_by_config_rule -> 'Compliance' ->> 'ComplianceType' = 'NON_COMPLIANT' then 'alarm'
             else 'ok'
           end as status,
           case
@@ -1178,7 +1178,7 @@ query "ksi_cna_07_2_aws_check" {
               then c.name || ' has EXPIRED exemption (expired: ' || e.exemption_expiry || ').' || coalesce(' Reason: ' || e.exemption_reason || '.', '')
             when e.arn is not null
               then c.name || ' is exempt.' || coalesce(' Reason: ' || e.exemption_reason || '.', '')
-            when c.compliance_status = 'NON_COMPLIANT' then 'Config rule ' || c.name || ' is NON_COMPLIANT.'
+            when c.compliance_by_config_rule -> 'Compliance' ->> 'ComplianceType' = 'NON_COMPLIANT' then 'Config rule ' || c.name || ' is NON_COMPLIANT.'
             else 'Config rule ' || c.name || ' is compliant.'
           end as reason,
           c.account_id
@@ -1216,7 +1216,7 @@ query "ksi_cna_08_1_aws_check" {
           case
             when er.arn is not null then 'alarm'
             when e.arn is not null and er.arn is null then 'skip'
-            when c.compliance_status = 'NON_COMPLIANT' then 'alarm'
+            when c.compliance_by_config_rule -> 'Compliance' ->> 'ComplianceType' = 'NON_COMPLIANT' then 'alarm'
             else 'ok'
           end as status,
           case
@@ -1224,8 +1224,8 @@ query "ksi_cna_08_1_aws_check" {
               then c.name || ' has EXPIRED exemption (expired: ' || e.exemption_expiry || ').' || coalesce(' Reason: ' || e.exemption_reason || '.', '')
             when e.arn is not null
               then c.name || ' is exempt.' || coalesce(' Reason: ' || e.exemption_reason || '.', '')
-            when c.compliance_status = 'NON_COMPLIANT'
-              then 'Config rule ' || c.name || ' detects drift (NON_COMPLIANT): ' || coalesce(c.compliance_status, 'unknown') || '.'
+            when c.compliance_by_config_rule -> 'Compliance' ->> 'ComplianceType' = 'NON_COMPLIANT'
+              then 'Config rule ' || c.name || ' detects drift (NON_COMPLIANT): ' || coalesce(c.compliance_by_config_rule -> 'Compliance' ->> 'ComplianceType', 'unknown') || '.'
             else 'Config rule ' || c.name || ' shows no drift (compliant).'
           end as reason,
           c.account_id
@@ -1280,7 +1280,7 @@ query "ksi_cna_08_3_aws_check" {
           case
             when er.arn is not null then 'alarm'
             when e.arn is not null and er.arn is null then 'skip'
-            when c.compliance_status = 'NON_COMPLIANT' and r.config_rule_name is null then 'alarm'
+            when c.compliance_by_config_rule -> 'Compliance' ->> 'ComplianceType' = 'NON_COMPLIANT' and r.config_rule_name is null then 'alarm'
             else 'ok'
           end as status,
           case
@@ -1288,9 +1288,9 @@ query "ksi_cna_08_3_aws_check" {
               then c.name || ' has EXPIRED exemption (expired: ' || e.exemption_expiry || ').' || coalesce(' Reason: ' || e.exemption_reason || '.', '')
             when e.arn is not null
               then c.name || ' is exempt.' || coalesce(' Reason: ' || e.exemption_reason || '.', '')
-            when c.compliance_status = 'NON_COMPLIANT' and r.config_rule_name is null
+            when c.compliance_by_config_rule -> 'Compliance' ->> 'ComplianceType' = 'NON_COMPLIANT' and r.config_rule_name is null
               then 'Config rule ' || c.name || ' is NON_COMPLIANT but has NO auto-remediation (detection only, not enforcement).'
-            when c.compliance_status = 'NON_COMPLIANT' and r.config_rule_name is not null
+            when c.compliance_by_config_rule -> 'Compliance' ->> 'ComplianceType' = 'NON_COMPLIANT' and r.config_rule_name is not null
               then 'Config rule ' || c.name || ' is NON_COMPLIANT but has auto-remediation configured.'
             else 'Config rule ' || c.name || ' is compliant.'
           end as reason,
@@ -1301,6 +1301,6 @@ query "ksi_cna_08_3_aws_check" {
           left join exempt_rules as e on c.arn = e.arn
           left join expired_rules as er on c.arn = er.arn
         where
-          c.compliance_status = 'NON_COMPLIANT'
+          c.compliance_by_config_rule -> 'Compliance' ->> 'ComplianceType' = 'NON_COMPLIANT'
   EOQ
 }

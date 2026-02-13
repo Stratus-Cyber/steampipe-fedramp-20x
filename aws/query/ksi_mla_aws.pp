@@ -263,7 +263,7 @@ query "ksi_mla_05_2_aws_check" {
           case
             when er.arn is not null then 'alarm'
             when e.arn is not null and er.arn is null then 'skip'
-            when c.compliance_status = 'NON_COMPLIANT' then 'alarm'
+            when c.compliance_by_config_rule -> 'Compliance' ->> 'ComplianceType' = 'NON_COMPLIANT' then 'alarm'
             else 'ok'
           end as status,
           case
@@ -271,7 +271,7 @@ query "ksi_mla_05_2_aws_check" {
               then c.name || ' has EXPIRED exemption (expired: ' || e.exemption_expiry || ').' || coalesce(' Reason: ' || e.exemption_reason || '.', '')
             when e.arn is not null
               then c.name || ' is exempt.' || coalesce(' Reason: ' || e.exemption_reason || '.', '')
-            when c.compliance_status = 'NON_COMPLIANT'
+            when c.compliance_by_config_rule -> 'Compliance' ->> 'ComplianceType' = 'NON_COMPLIANT'
               then 'Config rule ' || c.name || ' is NON_COMPLIANT (configuration drift detected).'
             else 'Config rule ' || c.name || ' is compliant.'
           end as reason,

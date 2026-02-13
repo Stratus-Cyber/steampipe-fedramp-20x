@@ -1,5 +1,5 @@
 # KSI-CNA: Cloud Native Architecture Queries - Azure
-# Updated for Turbot Pipes workspace schema (all_azure.*)
+# Updated for Turbot Pipes workspace schema (azure.*)
 
 query "ksi_cna_01_1_azure_check" {
   sql = <<-EOQ
@@ -9,7 +9,7 @@ query "ksi_cna_01_1_azure_check" {
             tags->>'${var.exemption_expiry_tag}' as exemption_expiry,
             tags->>'${var.exemption_reason_key}' as exemption_reason
           from
-            all_azure.azure_network_security_group
+            azure.azure_network_security_group
           where
             tags->>'${var.exemption_tag_key}' is not null
               and ('KSI-CNA-01' = any(string_to_array(tags->>'${var.exemption_tag_key}', ':'))
@@ -54,10 +54,10 @@ query "ksi_cna_01_1_azure_check" {
           end as reason,
           nsg.subscription_id
         from
-          all_azure.azure_network_security_group as nsg,
+          azure.azure_network_security_group as nsg
           left join exempt_1 as e_1 on nsg.id = e_1.exempt_id
           left join expired_1 as exp_1 on nsg.id = exp_1.exempt_id
-          jsonb_array_elements(security_rules) as rule
+          cross join jsonb_array_elements(security_rules) as rule
   EOQ
 }
 
@@ -69,7 +69,7 @@ query "ksi_cna_01_2_azure_check" {
             tags->>'${var.exemption_expiry_tag}' as exemption_expiry,
             tags->>'${var.exemption_reason_key}' as exemption_reason
           from
-            all_azure.azure_compute_virtual_machine
+            azure.azure_compute_virtual_machine
           where
             tags->>'${var.exemption_tag_key}' is not null
               and ('KSI-CNA-01' = any(string_to_array(tags->>'${var.exemption_tag_key}', ':'))
@@ -98,11 +98,11 @@ query "ksi_cna_01_2_azure_check" {
           end as reason,
           vm.subscription_id
         from
-          all_azure.azure_compute_virtual_machine as vm,
+          azure.azure_compute_virtual_machine as vm
           left join exempt_2 as e_2 on vm.id = e_2.exempt_id
           left join expired_2 as exp_2 on vm.id = exp_2.exempt_id
-          jsonb_array_elements(network_interfaces) as vm_nic
-          join all_azure.azure_network_interface as nic on nic.id = vm_nic ->> 'id'
+          cross join jsonb_array_elements(network_interfaces) as vm_nic
+          join azure.azure_network_interface as nic on nic.id = vm_nic ->> 'id'
   EOQ
 }
 
@@ -121,7 +121,7 @@ query "ksi_cna_01_3_azure_check" {
           end as reason,
           subscription_id
         from
-          all_azure.azure_subnet
+          azure.azure_subnet
         where
           name != 'GatewaySubnet'
           and name != 'AzureFirewallSubnet'
@@ -137,7 +137,7 @@ query "ksi_cna_01_4_azure_check" {
             tags->>'${var.exemption_expiry_tag}' as exemption_expiry,
             tags->>'${var.exemption_reason_key}' as exemption_reason
           from
-            all_azure.azure_application_gateway
+            azure.azure_application_gateway
           where
             tags->>'${var.exemption_tag_key}' is not null
               and ('KSI-CNA-01' = any(string_to_array(tags->>'${var.exemption_tag_key}', ':'))
@@ -170,9 +170,9 @@ query "ksi_cna_01_4_azure_check" {
           end as reason,
           subscription_id
         from
-          all_azure.azure_application_gateway
-          left join exempt_3 as e_3 on all_azure.azure_application_gateway.id = e_3.exempt_id
-          left join expired_3 as exp_3 on all_azure.azure_application_gateway.id = exp_3.exempt_id
+          azure.azure_application_gateway
+          left join exempt_3 as e_3 on azure.azure_application_gateway.id = e_3.exempt_id
+          left join expired_3 as exp_3 on azure.azure_application_gateway.id = exp_3.exempt_id
   EOQ
 }
 
@@ -184,7 +184,7 @@ query "ksi_cna_02_1_azure_check" {
             tags->>'${var.exemption_expiry_tag}' as exemption_expiry,
             tags->>'${var.exemption_reason_key}' as exemption_reason
           from
-            all_azure.azure_compute_virtual_machine
+            azure.azure_compute_virtual_machine
           where
             tags->>'${var.exemption_tag_key}' is not null
               and ('KSI-CNA-02' = any(string_to_array(tags->>'${var.exemption_tag_key}', ':'))
@@ -213,10 +213,10 @@ query "ksi_cna_02_1_azure_check" {
           end as reason,
           vm.subscription_id
         from
-          all_azure.azure_compute_virtual_machine as vm
+          azure.azure_compute_virtual_machine as vm
           left join exempt_1 as e_1 on vm.id = e_1.exempt_id
           left join expired_1 as exp_1 on vm.id = exp_1.exempt_id
-          join all_azure.azure_compute_disk as disk on disk.id = vm.managed_disk_id
+          join azure.azure_compute_disk as disk on disk.id = vm.managed_disk_id
   EOQ
 }
 
@@ -228,7 +228,7 @@ query "ksi_cna_02_2_azure_check" {
             tags->>'${var.exemption_expiry_tag}' as exemption_expiry,
             tags->>'${var.exemption_reason_key}' as exemption_reason
           from
-            all_azure.azure_sql_database
+            azure.azure_sql_database
           where
             tags->>'${var.exemption_tag_key}' is not null
               and ('KSI-CNA-02' = any(string_to_array(tags->>'${var.exemption_tag_key}', ':'))
@@ -245,9 +245,9 @@ query "ksi_cna_02_2_azure_check" {
           name || ' has Transparent Data Encryption enabled by default.' as reason,
           subscription_id
         from
-          all_azure.azure_sql_database
-          left join exempt_2 as e_2 on all_azure.azure_sql_database.id = e_2.exempt_id
-          left join expired_2 as exp_2 on all_azure.azure_sql_database.id = exp_2.exempt_id
+          azure.azure_sql_database
+          left join exempt_2 as e_2 on azure.azure_sql_database.id = e_2.exempt_id
+          left join expired_2 as exp_2 on azure.azure_sql_database.id = exp_2.exempt_id
         where
           name != 'master'
   EOQ
@@ -261,7 +261,7 @@ query "ksi_cna_02_3_azure_check" {
             tags->>'${var.exemption_expiry_tag}' as exemption_expiry,
             tags->>'${var.exemption_reason_key}' as exemption_reason
           from
-            all_azure.azure_storage_account
+            azure.azure_storage_account
           where
             tags->>'${var.exemption_tag_key}' is not null
               and ('KSI-CNA-02' = any(string_to_array(tags->>'${var.exemption_tag_key}', ':'))
@@ -279,9 +279,9 @@ query "ksi_cna_02_3_azure_check" {
           name || ' has encryption enabled (Azure Storage encrypts all data by default).' as reason,
           subscription_id
         from
-          all_azure.azure_storage_account
-          left join exempt_3 as e_3 on all_azure.azure_storage_account.id = e_3.exempt_id
-          left join expired_3 as exp_3 on all_azure.azure_storage_account.id = exp_3.exempt_id
+          azure.azure_storage_account
+          left join exempt_3 as e_3 on azure.azure_storage_account.id = e_3.exempt_id
+          left join expired_3 as exp_3 on azure.azure_storage_account.id = exp_3.exempt_id
   EOQ
 }
 
@@ -293,7 +293,7 @@ query "ksi_cna_02_4_azure_check" {
             tags->>'${var.exemption_expiry_tag}' as exemption_expiry,
             tags->>'${var.exemption_reason_key}' as exemption_reason
           from
-            all_azure.azure_storage_account
+            azure.azure_storage_account
           where
             tags->>'${var.exemption_tag_key}' is not null
               and ('KSI-CNA-02' = any(string_to_array(tags->>'${var.exemption_tag_key}', ':'))
@@ -324,9 +324,9 @@ query "ksi_cna_02_4_azure_check" {
           end as reason,
           subscription_id
         from
-          all_azure.azure_storage_account
-          left join exempt_4 as e_4 on all_azure.azure_storage_account.id = e_4.exempt_id
-          left join expired_4 as exp_4 on all_azure.azure_storage_account.id = exp_4.exempt_id
+          azure.azure_storage_account
+          left join exempt_4 as e_4 on azure.azure_storage_account.id = e_4.exempt_id
+          left join expired_4 as exp_4 on azure.azure_storage_account.id = exp_4.exempt_id
   EOQ
 }
 
@@ -338,7 +338,7 @@ query "ksi_cna_02_5_azure_check" {
             tags->>'${var.exemption_expiry_tag}' as exemption_expiry,
             tags->>'${var.exemption_reason_key}' as exemption_reason
           from
-            all_azure.azure_kubernetes_cluster
+            azure.azure_kubernetes_cluster
           where
             tags->>'${var.exemption_tag_key}' is not null
               and ('KSI-CNA-02' = any(string_to_array(tags->>'${var.exemption_tag_key}', ':'))
@@ -367,9 +367,9 @@ query "ksi_cna_02_5_azure_check" {
           end as reason,
           subscription_id
         from
-          all_azure.azure_kubernetes_cluster
-          left join exempt_5 as e_5 on all_azure.azure_kubernetes_cluster.id = e_5.exempt_id
-          left join expired_5 as exp_5 on all_azure.azure_kubernetes_cluster.id = exp_5.exempt_id
+          azure.azure_kubernetes_cluster
+          left join exempt_5 as e_5 on azure.azure_kubernetes_cluster.id = e_5.exempt_id
+          left join expired_5 as exp_5 on azure.azure_kubernetes_cluster.id = exp_5.exempt_id
   EOQ
 }
 
@@ -381,7 +381,7 @@ query "ksi_cna_03_1_azure_check" {
             tags->>'${var.exemption_expiry_tag}' as exemption_expiry,
             tags->>'${var.exemption_reason_key}' as exemption_reason
           from
-            all_azure.azure_storage_account
+            azure.azure_storage_account
           where
             tags->>'${var.exemption_tag_key}' is not null
               and ('KSI-CNA-03' = any(string_to_array(tags->>'${var.exemption_tag_key}', ':'))
@@ -410,9 +410,9 @@ query "ksi_cna_03_1_azure_check" {
           end as reason,
           subscription_id
         from
-          all_azure.azure_storage_account
-          left join exempt_1 as e_1 on all_azure.azure_storage_account.id = e_1.exempt_id
-          left join expired_1 as exp_1 on all_azure.azure_storage_account.id = exp_1.exempt_id
+          azure.azure_storage_account
+          left join exempt_1 as e_1 on azure.azure_storage_account.id = e_1.exempt_id
+          left join expired_1 as exp_1 on azure.azure_storage_account.id = exp_1.exempt_id
   EOQ
 }
 
@@ -424,7 +424,7 @@ query "ksi_cna_03_2_azure_check" {
             tags->>'${var.exemption_expiry_tag}' as exemption_expiry,
             tags->>'${var.exemption_reason_key}' as exemption_reason
           from
-            all_azure.azure_application_gateway
+            azure.azure_application_gateway
           where
             tags->>'${var.exemption_tag_key}' is not null
               and ('KSI-CNA-03' = any(string_to_array(tags->>'${var.exemption_tag_key}', ':'))
@@ -457,9 +457,9 @@ query "ksi_cna_03_2_azure_check" {
           end as reason,
           subscription_id
         from
-          all_azure.azure_application_gateway
-          left join exempt_2 as e_2 on all_azure.azure_application_gateway.id = e_2.exempt_id
-          left join expired_2 as exp_2 on all_azure.azure_application_gateway.id = exp_2.exempt_id
+          azure.azure_application_gateway
+          left join exempt_2 as e_2 on azure.azure_application_gateway.id = e_2.exempt_id
+          left join expired_2 as exp_2 on azure.azure_application_gateway.id = exp_2.exempt_id
         where
           ssl_policy is not null
   EOQ
@@ -473,7 +473,7 @@ query "ksi_cna_03_3_azure_check" {
             tags->>'${var.exemption_expiry_tag}' as exemption_expiry,
             tags->>'${var.exemption_reason_key}' as exemption_reason
           from
-            all_azure.azure_redis_cache
+            azure.azure_redis_cache
           where
             tags->>'${var.exemption_tag_key}' is not null
               and ('KSI-CNA-03' = any(string_to_array(tags->>'${var.exemption_tag_key}', ':'))
@@ -502,9 +502,9 @@ query "ksi_cna_03_3_azure_check" {
           end as reason,
           subscription_id
         from
-          all_azure.azure_redis_cache
-          left join exempt_3 as e_3 on all_azure.azure_redis_cache.id = e_3.exempt_id
-          left join expired_3 as exp_3 on all_azure.azure_redis_cache.id = exp_3.exempt_id
+          azure.azure_redis_cache
+          left join exempt_3 as e_3 on azure.azure_redis_cache.id = e_3.exempt_id
+          left join expired_3 as exp_3 on azure.azure_redis_cache.id = exp_3.exempt_id
   EOQ
 }
 
@@ -516,7 +516,7 @@ query "ksi_cna_03_4_azure_check" {
             tags->>'${var.exemption_expiry_tag}' as exemption_expiry,
             tags->>'${var.exemption_reason_key}' as exemption_reason
           from
-            all_azure.azure_postgresql_server
+            azure.azure_postgresql_server
           where
             tags->>'${var.exemption_tag_key}' is not null
               and ('KSI-CNA-03' = any(string_to_array(tags->>'${var.exemption_tag_key}', ':'))
@@ -545,9 +545,9 @@ query "ksi_cna_03_4_azure_check" {
           end as reason,
           subscription_id
         from
-          all_azure.azure_postgresql_server
-          left join exempt_4 as e_4 on all_azure.azure_postgresql_server.id = e_4.exempt_id
-          left join expired_4 as exp_4 on all_azure.azure_postgresql_server.id = exp_4.exempt_id
+          azure.azure_postgresql_server
+          left join exempt_4 as e_4 on azure.azure_postgresql_server.id = e_4.exempt_id
+          left join expired_4 as exp_4 on azure.azure_postgresql_server.id = exp_4.exempt_id
   EOQ
 }
 
@@ -559,7 +559,7 @@ query "ksi_cna_03_5_azure_check" {
             tags->>'${var.exemption_expiry_tag}' as exemption_expiry,
             tags->>'${var.exemption_reason_key}' as exemption_reason
           from
-            all_azure.azure_mysql_server
+            azure.azure_mysql_server
           where
             tags->>'${var.exemption_tag_key}' is not null
               and ('KSI-CNA-03' = any(string_to_array(tags->>'${var.exemption_tag_key}', ':'))
@@ -588,9 +588,9 @@ query "ksi_cna_03_5_azure_check" {
           end as reason,
           subscription_id
         from
-          all_azure.azure_mysql_server
-          left join exempt_5 as e_5 on all_azure.azure_mysql_server.id = e_5.exempt_id
-          left join expired_5 as exp_5 on all_azure.azure_mysql_server.id = exp_5.exempt_id
+          azure.azure_mysql_server
+          left join exempt_5 as e_5 on azure.azure_mysql_server.id = e_5.exempt_id
+          left join expired_5 as exp_5 on azure.azure_mysql_server.id = exp_5.exempt_id
   EOQ
 }
 
@@ -602,7 +602,7 @@ query "ksi_cna_04_1_azure_check" {
             tags->>'${var.exemption_expiry_tag}' as exemption_expiry,
             tags->>'${var.exemption_reason_key}' as exemption_reason
           from
-            all_azure.azure_compute_virtual_machine_scale_set
+            azure.azure_compute_virtual_machine_scale_set
           where
             tags->>'${var.exemption_tag_key}' is not null
               and ('KSI-CNA-04' = any(string_to_array(tags->>'${var.exemption_tag_key}', ':'))
@@ -631,9 +631,9 @@ query "ksi_cna_04_1_azure_check" {
           end as reason,
           subscription_id
         from
-          all_azure.azure_compute_virtual_machine_scale_set
-          left join exempt_1 as e_1 on all_azure.azure_compute_virtual_machine_scale_set.id = e_1.exempt_id
-          left join expired_1 as exp_1 on all_azure.azure_compute_virtual_machine_scale_set.id = exp_1.exempt_id
+          azure.azure_compute_virtual_machine_scale_set
+          left join exempt_1 as e_1 on azure.azure_compute_virtual_machine_scale_set.id = e_1.exempt_id
+          left join expired_1 as exp_1 on azure.azure_compute_virtual_machine_scale_set.id = exp_1.exempt_id
   EOQ
 }
 
@@ -645,7 +645,7 @@ query "ksi_cna_04_2_azure_check" {
             tags->>'${var.exemption_expiry_tag}' as exemption_expiry,
             tags->>'${var.exemption_reason_key}' as exemption_reason
           from
-            all_azure.azure_kubernetes_cluster
+            azure.azure_kubernetes_cluster
           where
             tags->>'${var.exemption_tag_key}' is not null
               and ('KSI-CNA-04' = any(string_to_array(tags->>'${var.exemption_tag_key}', ':'))
@@ -674,9 +674,9 @@ query "ksi_cna_04_2_azure_check" {
           end as reason,
           subscription_id
         from
-          all_azure.azure_kubernetes_cluster
-          left join exempt_2 as e_2 on all_azure.azure_kubernetes_cluster.id = e_2.exempt_id
-          left join expired_2 as exp_2 on all_azure.azure_kubernetes_cluster.id = exp_2.exempt_id
+          azure.azure_kubernetes_cluster
+          left join exempt_2 as e_2 on azure.azure_kubernetes_cluster.id = e_2.exempt_id
+          left join expired_2 as exp_2 on azure.azure_kubernetes_cluster.id = exp_2.exempt_id
   EOQ
 }
 
@@ -688,7 +688,7 @@ query "ksi_cna_04_3_azure_check" {
             tags->>'${var.exemption_expiry_tag}' as exemption_expiry,
             tags->>'${var.exemption_reason_key}' as exemption_reason
           from
-            all_azure.azure_container_registry
+            azure.azure_container_registry
           where
             tags->>'${var.exemption_tag_key}' is not null
               and ('KSI-CNA-04' = any(string_to_array(tags->>'${var.exemption_tag_key}', ':'))
@@ -717,9 +717,9 @@ query "ksi_cna_04_3_azure_check" {
           end as reason,
           subscription_id
         from
-          all_azure.azure_container_registry
-          left join exempt_3 as e_3 on all_azure.azure_container_registry.id = e_3.exempt_id
-          left join expired_3 as exp_3 on all_azure.azure_container_registry.id = exp_3.exempt_id
+          azure.azure_container_registry
+          left join exempt_3 as e_3 on azure.azure_container_registry.id = e_3.exempt_id
+          left join expired_3 as exp_3 on azure.azure_container_registry.id = exp_3.exempt_id
   EOQ
 }
 
@@ -731,7 +731,7 @@ query "ksi_cna_04_4_azure_check" {
             tags->>'${var.exemption_expiry_tag}' as exemption_expiry,
             tags->>'${var.exemption_reason_key}' as exemption_reason
           from
-            all_azure.azure_app_service_web_app
+            azure.azure_app_service_web_app
           where
             tags->>'${var.exemption_tag_key}' is not null
               and ('KSI-CNA-04' = any(string_to_array(tags->>'${var.exemption_tag_key}', ':'))
@@ -766,9 +766,9 @@ query "ksi_cna_04_4_azure_check" {
           end as reason,
           subscription_id
         from
-          all_azure.azure_app_service_web_app
-          left join exempt_4 as e_4 on all_azure.azure_app_service_web_app.id = e_4.exempt_id
-          left join expired_4 as exp_4 on all_azure.azure_app_service_web_app.id = exp_4.exempt_id
+          azure.azure_app_service_web_app
+          left join exempt_4 as e_4 on azure.azure_app_service_web_app.id = e_4.exempt_id
+          left join expired_4 as exp_4 on azure.azure_app_service_web_app.id = exp_4.exempt_id
   EOQ
 }
 
@@ -780,7 +780,7 @@ query "ksi_cna_04_5_azure_check" {
             tags->>'${var.exemption_expiry_tag}' as exemption_expiry,
             tags->>'${var.exemption_reason_key}' as exemption_reason
           from
-            all_azure.azure_storage_account
+            azure.azure_storage_account
           where
             tags->>'${var.exemption_tag_key}' is not null
               and ('KSI-CNA-04' = any(string_to_array(tags->>'${var.exemption_tag_key}', ':'))
@@ -809,8 +809,8 @@ query "ksi_cna_04_5_azure_check" {
           end as reason,
           subscription_id
         from
-          all_azure.azure_storage_account
-          left join exempt_5 as e_5 on all_azure.azure_storage_account.id = e_5.exempt_id
-          left join expired_5 as exp_5 on all_azure.azure_storage_account.id = exp_5.exempt_id
+          azure.azure_storage_account
+          left join exempt_5 as e_5 on azure.azure_storage_account.id = e_5.exempt_id
+          left join expired_5 as exp_5 on azure.azure_storage_account.id = exp_5.exempt_id
   EOQ
 }

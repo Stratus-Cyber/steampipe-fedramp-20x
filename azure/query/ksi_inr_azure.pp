@@ -1,5 +1,5 @@
 # KSI-INR: Incident Response Queries - Azure
-# Updated for Turbot Pipes workspace schema (all_azure.*)
+# Updated for Turbot Pipes workspace schema (azure.*)
 # Note: Security Center contacts API not available in Azure Government
 
 query "ksi_inr_01_1_azure_check" {
@@ -19,7 +19,7 @@ query "ksi_inr_01_1_azure_check" {
           end as reason,
           subscription_id
         from
-          all_azure.azure_security_center_subscription_pricing
+          azure.azure_security_center_subscription_pricing
   EOQ
 }
 
@@ -36,7 +36,7 @@ query "ksi_inr_01_2_azure_check" {
           'Subscription has ' || count(*) || ' activity log alert rules for administrative operations (recommend at least 9 for CIS compliance).' as reason,
           subscription_id
         from
-          all_azure.azure_log_alert
+          azure.azure_log_alert
         where
           enabled = true
         group by

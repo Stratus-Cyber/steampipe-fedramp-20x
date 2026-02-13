@@ -435,7 +435,7 @@ query "ksi_svc_04_3_aws_check" {
           case
             when er.arn is not null then 'alarm'
             when e.arn is not null and er.arn is null then 'skip'
-            when r.compliance_status = 'NON_COMPLIANT' then 'alarm'
+            when r.compliance_by_config_rule -> 'Compliance' ->> 'ComplianceType' = 'NON_COMPLIANT' then 'alarm'
             else 'ok'
           end as status,
           case
@@ -443,7 +443,7 @@ query "ksi_svc_04_3_aws_check" {
               then 'Config rule ' || r.name || ' has EXPIRED exemption (expired: ' || e.exemption_expiry || ').' || coalesce(' Reason: ' || e.exemption_reason || '.', '')
             when e.arn is not null
               then 'Config rule ' || r.name || ' is exempt.' || coalesce(' Reason: ' || e.exemption_reason || '.', '')
-            when r.compliance_status = 'NON_COMPLIANT'
+            when r.compliance_by_config_rule -> 'Compliance' ->> 'ComplianceType' = 'NON_COMPLIANT'
               then 'Config rule ' || r.name || ' is NON_COMPLIANT (Config rules automate configuration validation, drift detected).'
             else 'Config rule ' || r.name || ' is compliant.'
           end as reason,

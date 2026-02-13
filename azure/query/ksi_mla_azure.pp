@@ -1,5 +1,5 @@
 # KSI-MLA: Monitoring, Logging, Auditing Queries - Azure
-# Updated for Turbot Pipes workspace schema (all_azure.*)
+# Updated for Turbot Pipes workspace schema (azure.*)
 
 query "ksi_mla_01_1_azure_check" {
   sql = <<-EOQ
@@ -18,7 +18,7 @@ query "ksi_mla_01_1_azure_check" {
           end as reason,
           subscription_id
         from
-          all_azure.azure_log_profile
+          azure.azure_log_profile
   EOQ
 }
 
@@ -30,7 +30,7 @@ query "ksi_mla_01_2_azure_check" {
             tags->>'${var.exemption_expiry_tag}' as exemption_expiry,
             tags->>'${var.exemption_reason_key}' as exemption_reason
           from
-            all_azure.azure_key_vault
+            azure.azure_key_vault
           where
             tags->>'${var.exemption_tag_key}' is not null
               and ('KSI-MLA-01' = any(string_to_array(tags->>'${var.exemption_tag_key}', ':'))
@@ -59,9 +59,9 @@ query "ksi_mla_01_2_azure_check" {
           end as reason,
           subscription_id
         from
-          all_azure.azure_key_vault
-          left join exempt_1 as e_1 on all_azure.azure_key_vault.id = e_1.exempt_id
-          left join expired_1 as exp_1 on all_azure.azure_key_vault.id = exp_1.exempt_id
+          azure.azure_key_vault
+          left join exempt_1 as e_1 on azure.azure_key_vault.id = e_1.exempt_id
+          left join expired_1 as exp_1 on azure.azure_key_vault.id = exp_1.exempt_id
   EOQ
 }
 
@@ -73,7 +73,7 @@ query "ksi_mla_01_3_azure_check" {
             tags->>'${var.exemption_expiry_tag}' as exemption_expiry,
             tags->>'${var.exemption_reason_key}' as exemption_reason
           from
-            all_azure.azure_network_security_group
+            azure.azure_network_security_group
           where
             tags->>'${var.exemption_tag_key}' is not null
               and ('KSI-MLA-01' = any(string_to_array(tags->>'${var.exemption_tag_key}', ':'))
@@ -102,9 +102,9 @@ query "ksi_mla_01_3_azure_check" {
           end as reason,
           subscription_id
         from
-          all_azure.azure_network_security_group
-          left join exempt_2 as e_2 on all_azure.azure_network_security_group.id = e_2.exempt_id
-          left join expired_2 as exp_2 on all_azure.azure_network_security_group.id = exp_2.exempt_id
+          azure.azure_network_security_group
+          left join exempt_2 as e_2 on azure.azure_network_security_group.id = e_2.exempt_id
+          left join expired_2 as exp_2 on azure.azure_network_security_group.id = exp_2.exempt_id
   EOQ
 }
 
@@ -116,7 +116,7 @@ query "ksi_mla_01_4_azure_check" {
             tags->>'${var.exemption_expiry_tag}' as exemption_expiry,
             tags->>'${var.exemption_reason_key}' as exemption_reason
           from
-            all_azure.azure_sql_server
+            azure.azure_sql_server
           where
             tags->>'${var.exemption_tag_key}' is not null
               and ('KSI-MLA-01' = any(string_to_array(tags->>'${var.exemption_tag_key}', ':'))
@@ -133,9 +133,9 @@ query "ksi_mla_01_4_azure_check" {
           name || ' has auditing enabled by default.' as reason,
           subscription_id
         from
-          all_azure.azure_sql_server
-          left join exempt_3 as e_3 on all_azure.azure_sql_server.id = e_3.exempt_id
-          left join expired_3 as exp_3 on all_azure.azure_sql_server.id = exp_3.exempt_id
+          azure.azure_sql_server
+          left join exempt_3 as e_3 on azure.azure_sql_server.id = e_3.exempt_id
+          left join expired_3 as exp_3 on azure.azure_sql_server.id = exp_3.exempt_id
   EOQ
 }
 
@@ -147,7 +147,7 @@ query "ksi_mla_01_5_azure_check" {
             tags->>'${var.exemption_expiry_tag}' as exemption_expiry,
             tags->>'${var.exemption_reason_key}' as exemption_reason
           from
-            all_azure.azure_log_analytics_workspace
+            azure.azure_log_analytics_workspace
           where
             tags->>'${var.exemption_tag_key}' is not null
               and ('KSI-MLA-01' = any(string_to_array(tags->>'${var.exemption_tag_key}', ':'))
@@ -178,9 +178,9 @@ query "ksi_mla_01_5_azure_check" {
           end as reason,
           subscription_id
         from
-          all_azure.azure_log_analytics_workspace
-          left join exempt_4 as e_4 on all_azure.azure_log_analytics_workspace.id = e_4.exempt_id
-          left join expired_4 as exp_4 on all_azure.azure_log_analytics_workspace.id = exp_4.exempt_id
+          azure.azure_log_analytics_workspace
+          left join exempt_4 as e_4 on azure.azure_log_analytics_workspace.id = e_4.exempt_id
+          left join expired_4 as exp_4 on azure.azure_log_analytics_workspace.id = exp_4.exempt_id
   EOQ
 }
 
@@ -196,7 +196,7 @@ query "ksi_mla_01_6_azure_check" {
           'Subscription has ' || count(*) || ' log alert rules configured.' as reason,
           subscription_id
         from
-          all_azure.azure_log_alert
+          azure.azure_log_alert
         group by
           subscription_id
   EOQ

@@ -1,5 +1,5 @@
 # KSI-IAM: Identity and Access Management Queries - Azure
-# Updated for Turbot Pipes workspace schema (all_azure.* and azuread.*)
+# Updated for Turbot Pipes workspace schema (azure.* and azuread.*)
 
 query "ksi_iam_01_1_azure_check" {
   sql = <<-EOQ
@@ -55,7 +55,7 @@ query "ksi_iam_02_1_azure_check" {
             tags->>'${var.exemption_expiry_tag}' as exemption_expiry,
             tags->>'${var.exemption_reason_key}' as exemption_reason
           from
-            all_azure.azure_key_vault_key
+            azure.azure_key_vault_key
           where
             tags->>'${var.exemption_tag_key}' is not null
               and ('KSI-IAM-02' = any(string_to_array(tags->>'${var.exemption_tag_key}', ':'))
@@ -86,9 +86,9 @@ query "ksi_iam_02_1_azure_check" {
           end as reason,
           subscription_id
         from
-          all_azure.azure_key_vault_key
-          left join exempt_1 as e_1 on all_azure.azure_key_vault_key.id = e_1.exempt_id
-          left join expired_1 as exp_1 on all_azure.azure_key_vault_key.id = exp_1.exempt_id
+          azure.azure_key_vault_key
+          left join exempt_1 as e_1 on azure.azure_key_vault_key.id = e_1.exempt_id
+          left join expired_1 as exp_1 on azure.azure_key_vault_key.id = exp_1.exempt_id
   EOQ
 }
 
@@ -100,7 +100,7 @@ query "ksi_iam_02_2_azure_check" {
             tags->>'${var.exemption_expiry_tag}' as exemption_expiry,
             tags->>'${var.exemption_reason_key}' as exemption_reason
           from
-            all_azure.azure_key_vault_secret
+            azure.azure_key_vault_secret
           where
             tags->>'${var.exemption_tag_key}' is not null
               and ('KSI-IAM-02' = any(string_to_array(tags->>'${var.exemption_tag_key}', ':'))
@@ -131,9 +131,9 @@ query "ksi_iam_02_2_azure_check" {
           end as reason,
           subscription_id
         from
-          all_azure.azure_key_vault_secret
-          left join exempt_2 as e_2 on all_azure.azure_key_vault_secret.id = e_2.exempt_id
-          left join expired_2 as exp_2 on all_azure.azure_key_vault_secret.id = exp_2.exempt_id
+          azure.azure_key_vault_secret
+          left join exempt_2 as e_2 on azure.azure_key_vault_secret.id = e_2.exempt_id
+          left join expired_2 as exp_2 on azure.azure_key_vault_secret.id = exp_2.exempt_id
   EOQ
 }
 
@@ -145,7 +145,7 @@ query "ksi_iam_02_3_azure_check" {
             tags->>'${var.exemption_expiry_tag}' as exemption_expiry,
             tags->>'${var.exemption_reason_key}' as exemption_reason
           from
-            all_azure.azure_storage_account
+            azure.azure_storage_account
           where
             tags->>'${var.exemption_tag_key}' is not null
               and ('KSI-IAM-02' = any(string_to_array(tags->>'${var.exemption_tag_key}', ':'))
@@ -174,9 +174,9 @@ query "ksi_iam_02_3_azure_check" {
           end as reason,
           subscription_id
         from
-          all_azure.azure_storage_account
-          left join exempt_3 as e_3 on all_azure.azure_storage_account.id = e_3.exempt_id
-          left join expired_3 as exp_3 on all_azure.azure_storage_account.id = exp_3.exempt_id
+          azure.azure_storage_account
+          left join exempt_3 as e_3 on azure.azure_storage_account.id = e_3.exempt_id
+          left join expired_3 as exp_3 on azure.azure_storage_account.id = exp_3.exempt_id
   EOQ
 }
 
@@ -211,7 +211,7 @@ query "ksi_iam_03_2_azure_check" {
             tags->>'${var.exemption_expiry_tag}' as exemption_expiry,
             tags->>'${var.exemption_reason_key}' as exemption_reason
           from
-            all_azure.azure_compute_virtual_machine
+            azure.azure_compute_virtual_machine
           where
             tags->>'${var.exemption_tag_key}' is not null
               and ('KSI-IAM-03' = any(string_to_array(tags->>'${var.exemption_tag_key}', ':'))
@@ -240,9 +240,9 @@ query "ksi_iam_03_2_azure_check" {
           end as reason,
           subscription_id
         from
-          all_azure.azure_compute_virtual_machine
-          left join exempt_1 as e_1 on all_azure.azure_compute_virtual_machine.id = e_1.exempt_id
-          left join expired_1 as exp_1 on all_azure.azure_compute_virtual_machine.id = exp_1.exempt_id
+          azure.azure_compute_virtual_machine
+          left join exempt_1 as e_1 on azure.azure_compute_virtual_machine.id = e_1.exempt_id
+          left join expired_1 as exp_1 on azure.azure_compute_virtual_machine.id = exp_1.exempt_id
   EOQ
 }
 
@@ -254,7 +254,7 @@ query "ksi_iam_03_3_azure_check" {
             tags->>'${var.exemption_expiry_tag}' as exemption_expiry,
             tags->>'${var.exemption_reason_key}' as exemption_reason
           from
-            all_azure.azure_sql_server
+            azure.azure_sql_server
           where
             tags->>'${var.exemption_tag_key}' is not null
               and ('KSI-IAM-03' = any(string_to_array(tags->>'${var.exemption_tag_key}', ':'))
@@ -283,9 +283,9 @@ query "ksi_iam_03_3_azure_check" {
           end as reason,
           subscription_id
         from
-          all_azure.azure_sql_server
-          left join exempt_2 as e_2 on all_azure.azure_sql_server.id = e_2.exempt_id
-          left join expired_2 as exp_2 on all_azure.azure_sql_server.id = exp_2.exempt_id
+          azure.azure_sql_server
+          left join exempt_2 as e_2 on azure.azure_sql_server.id = e_2.exempt_id
+          left join expired_2 as exp_2 on azure.azure_sql_server.id = exp_2.exempt_id
   EOQ
 }
 
@@ -297,7 +297,7 @@ query "ksi_iam_03_4_azure_check" {
             tags->>'${var.exemption_expiry_tag}' as exemption_expiry,
             tags->>'${var.exemption_reason_key}' as exemption_reason
           from
-            all_azure.azure_app_service_web_app
+            azure.azure_app_service_web_app
           where
             tags->>'${var.exemption_tag_key}' is not null
               and ('KSI-IAM-03' = any(string_to_array(tags->>'${var.exemption_tag_key}', ':'))
@@ -326,9 +326,9 @@ query "ksi_iam_03_4_azure_check" {
           end as reason,
           subscription_id
         from
-          all_azure.azure_app_service_web_app
-          left join exempt_3 as e_3 on all_azure.azure_app_service_web_app.id = e_3.exempt_id
-          left join expired_3 as exp_3 on all_azure.azure_app_service_web_app.id = exp_3.exempt_id
+          azure.azure_app_service_web_app
+          left join exempt_3 as e_3 on azure.azure_app_service_web_app.id = e_3.exempt_id
+          left join expired_3 as exp_3 on azure.azure_app_service_web_app.id = exp_3.exempt_id
   EOQ
 }
 
@@ -351,7 +351,7 @@ query "ksi_iam_05_1_azure_check" {
           end as reason,
           subscription_id
         from
-          all_azure.azure_role_definition
+          azure.azure_role_definition
         where
           role_type = 'CustomRole'
   EOQ
@@ -376,8 +376,8 @@ query "ksi_iam_05_2_azure_check" {
           end as reason,
           ra.subscription_id
         from
-          all_azure.azure_role_assignment as ra
-          join all_azure.azure_role_definition as rd on ra.role_definition_id = rd.id
+          azure.azure_role_assignment as ra
+          join azure.azure_role_definition as rd on ra.role_definition_id = rd.id
   EOQ
 }
 
@@ -449,7 +449,7 @@ query "ksi_iam_06_1_azure_check" {
           end as reason,
           subscription_id
         from
-          all_azure.azure_security_center_subscription_pricing
+          azure.azure_security_center_subscription_pricing
         where
           name in ('KeyVaults', 'Arm', 'OpenSourceRelationalDatabases')
   EOQ
@@ -471,7 +471,7 @@ query "ksi_iam_06_2_azure_check" {
           end as reason,
           subscription_id
         from
-          all_azure.azure_security_center_contact
+          azure.azure_security_center_contact
   EOQ
 }
 
