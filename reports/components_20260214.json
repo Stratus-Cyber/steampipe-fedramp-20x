@@ -1,0 +1,307 @@
+[
+    {
+        "Ticket ID": "703",
+        "Summary": "KSI-AFR-01 Minimum Assessment Scope",
+        "KSI Control": "KSI-AFR-01"
+    },
+    {
+        "Ticket ID": "705",
+        "Summary": "KSI-AFR-02 Key Security Indicators",
+        "KSI Control": "KSI-AFR-02"
+    },
+    {
+        "Ticket ID": "707",
+        "Summary": "KSI-AFR-03 Authorization Data Sharing",
+        "KSI Control": "KSI-AFR-03"
+    },
+    {
+        "Ticket ID": "709",
+        "Summary": "KSI-AFR-04 Vulnerability Detection and Response",
+        "KSI Control": "KSI-AFR-04"
+    },
+    {
+        "Ticket ID": "711",
+        "Summary": "KSI-AFR-05 Significant Change Notifications",
+        "KSI Control": "KSI-AFR-05"
+    },
+    {
+        "Ticket ID": "713",
+        "Summary": "KSI-AFR-06 Collaborative Continuous Monitoring",
+        "KSI Control": "KSI-AFR-06"
+    },
+    {
+        "Ticket ID": "715",
+        "Summary": "KSI-AFR-07 Recommended Secure Configuration",
+        "KSI Control": "KSI-AFR-07"
+    },
+    {
+        "Ticket ID": "717",
+        "Summary": "KSI-AFR-08 FedRAMP Security Inbox",
+        "KSI Control": "KSI-AFR-08"
+    },
+    {
+        "Ticket ID": "719",
+        "Summary": "KSI-AFR-09 Persistent Validation and Assessment",
+        "KSI Control": "KSI-AFR-09"
+    },
+    {
+        "Ticket ID": "721",
+        "Summary": "KSI-AFR-10 Incident Communications Procedures",
+        "KSI Control": "KSI-AFR-10"
+    },
+    {
+        "Ticket ID": "723",
+        "Summary": "KSI-AFR-11 Using Cryptographic Modules",
+        "KSI Control": "KSI-AFR-11"
+    },
+    {
+        "Ticket ID": "725",
+        "Summary": "KSI-CED-01 General Training",
+        "KSI Control": "KSI-CED-01"
+    },
+    {
+        "Ticket ID": "727",
+        "Summary": "KSI-CED-02 Role-Specific Training",
+        "KSI Control": "KSI-CED-02"
+    },
+    {
+        "Ticket ID": "729",
+        "Summary": "KSI-CED-03 Development and Engineering Training",
+        "KSI Control": "KSI-CED-03"
+    },
+    {
+        "Ticket ID": "731",
+        "Summary": "KSI-CED-04 Incident Response and Disaster Recovery Training",
+        "KSI Control": "KSI-CED-04"
+    },
+    {
+        "Ticket ID": "733",
+        "Summary": "KSI-CMT-01 Log and Monitor Changes",
+        "KSI Control": "KSI-CMT-01"
+    },
+    {
+        "Ticket ID": "735",
+        "Summary": "KSI-CMT-02 Redeployment",
+        "KSI Control": "KSI-CMT-02"
+    },
+    {
+        "Ticket ID": "737",
+        "Summary": "KSI-CMT-03 Automated Testing and Validation",
+        "KSI Control": "KSI-CMT-03"
+    },
+    {
+        "Ticket ID": "739",
+        "Summary": "KSI-CMT-04 Change Management Procedures",
+        "KSI Control": "KSI-CMT-04"
+    },
+    {
+        "Ticket ID": "741",
+        "Summary": "KSI-CNA-01 Restrict Network Traffic",
+        "KSI Control": "KSI-CNA-01"
+    },
+    {
+        "Ticket ID": "743",
+        "Summary": "KSI-CNA-02 Attack Surface",
+        "KSI Control": "KSI-CNA-02"
+    },
+    {
+        "Ticket ID": "745",
+        "Summary": "KSI-CNA-03 Enforce Traffic Flow",
+        "KSI Control": "KSI-CNA-03"
+    },
+    {
+        "Ticket ID": "747",
+        "Summary": "KSI-CNA-04 Immutable Infrastructure",
+        "KSI Control": "KSI-CNA-04"
+    },
+    {
+        "Ticket ID": "749",
+        "Summary": "KSI-CNA-05 Unwanted Activity",
+        "KSI Control": "KSI-CNA-05"
+    },
+    {
+        "Ticket ID": "751",
+        "Summary": "KSI-CNA-06 High Availability",
+        "KSI Control": "KSI-CNA-06"
+    },
+    {
+        "Ticket ID": "753",
+        "Summary": "KSI-CNA-07 Best Practices",
+        "KSI Control": "KSI-CNA-07"
+    },
+    {
+        "Ticket ID": "755",
+        "Summary": "KSI-CNA-08 Automated Enforcement",
+        "KSI Control": "KSI-CNA-08"
+    },
+    {
+        "Ticket ID": "757",
+        "Summary": "KSI-IAM-01 Phishing-Resistant MFA",
+        "KSI Control": "KSI-IAM-01"
+    },
+    {
+        "Ticket ID": "759",
+        "Summary": "KSI-IAM-02 Passwordless Authentication",
+        "KSI Control": "KSI-IAM-02"
+    },
+    {
+        "Ticket ID": "761",
+        "Summary": "KSI-IAM-03 Non-User Accounts",
+        "KSI Control": "KSI-IAM-03"
+    },
+    {
+        "Ticket ID": "763",
+        "Summary": "KSI-IAM-04 Just-in-Time Authorization",
+        "KSI Control": "KSI-IAM-04"
+    },
+    {
+        "Ticket ID": "765",
+        "Summary": "KSI-IAM-05 Least Privilege",
+        "KSI Control": "KSI-IAM-05"
+    },
+    {
+        "Ticket ID": "767",
+        "Summary": "KSI-IAM-06 Suspicious Activity",
+        "KSI Control": "KSI-IAM-06"
+    },
+    {
+        "Ticket ID": "769",
+        "Summary": "KSI-IAM-07 Automated Account Management",
+        "KSI Control": "KSI-IAM-07"
+    },
+    {
+        "Ticket ID": "771",
+        "Summary": "KSI-INR-01 Incident Response Procedures",
+        "KSI Control": "KSI-INR-01"
+    },
+    {
+        "Ticket ID": "773",
+        "Summary": "KSI-INR-02 Incident Review",
+        "KSI Control": "KSI-INR-02"
+    },
+    {
+        "Ticket ID": "775",
+        "Summary": "KSI-INR-03 Incident After Action Reports",
+        "KSI Control": "KSI-INR-03"
+    },
+    {
+        "Ticket ID": "777",
+        "Summary": "KSI-MLA-01 Security Information and Event Management (SIEM)",
+        "KSI Control": "KSI-MLA-01"
+    },
+    {
+        "Ticket ID": "779",
+        "Summary": "KSI-MLA-02 Audit Logging",
+        "KSI Control": "KSI-MLA-02"
+    },
+    {
+        "Ticket ID": "781",
+        "Summary": "KSI-MLA-05 Evaluate Configuration",
+        "KSI Control": "KSI-MLA-05"
+    },
+    {
+        "Ticket ID": "783",
+        "Summary": "KSI-MLA-07 Event Types",
+        "KSI Control": "KSI-MLA-07"
+    },
+    {
+        "Ticket ID": "785",
+        "Summary": "KSI-MLA-08 Log Data Access",
+        "KSI Control": "KSI-MLA-08"
+    },
+    {
+        "Ticket ID": "787",
+        "Summary": "KSI-PIY-01 Automated Inventory",
+        "KSI Control": "KSI-PIY-01"
+    },
+    {
+        "Ticket ID": "789",
+        "Summary": "KSI-PIY-03 Vulnerability Disclosure Program",
+        "KSI Control": "KSI-PIY-03"
+    },
+    {
+        "Ticket ID": "791",
+        "Summary": "KSI-PIY-04 CISA Secure By Design",
+        "KSI Control": "KSI-PIY-04"
+    },
+    {
+        "Ticket ID": "793",
+        "Summary": "KSI-PIY-06 Security Investment Effectiveness",
+        "KSI Control": "KSI-PIY-06"
+    },
+    {
+        "Ticket ID": "795",
+        "Summary": "KSI-PIY-08 Executive Support",
+        "KSI Control": "KSI-PIY-08"
+    },
+    {
+        "Ticket ID": "797",
+        "Summary": "KSI-RPL-01 Recovery Objectives",
+        "KSI Control": "KSI-RPL-01"
+    },
+    {
+        "Ticket ID": "799",
+        "Summary": "KSI-RPL-02 Recovery Plan",
+        "KSI Control": "KSI-RPL-02"
+    },
+    {
+        "Ticket ID": "801",
+        "Summary": "KSI-RPL-03 System Backups",
+        "KSI Control": "KSI-RPL-03"
+    },
+    {
+        "Ticket ID": "803",
+        "Summary": "KSI-RPL-04 Recovery Testing",
+        "KSI Control": "KSI-RPL-04"
+    },
+    {
+        "Ticket ID": "805",
+        "Summary": "KSI-SVC-01 Continuous Improvement",
+        "KSI Control": "KSI-SVC-01"
+    },
+    {
+        "Ticket ID": "807",
+        "Summary": "KSI-SVC-02 Network Encryption",
+        "KSI Control": "KSI-SVC-02"
+    },
+    {
+        "Ticket ID": "809",
+        "Summary": "KSI-SVC-04 Configuration Automation",
+        "KSI Control": "KSI-SVC-04"
+    },
+    {
+        "Ticket ID": "811",
+        "Summary": "KSI-SVC-05 Resource Integrity",
+        "KSI Control": "KSI-SVC-05"
+    },
+    {
+        "Ticket ID": "813",
+        "Summary": "KSI-SVC-06 Secret Management",
+        "KSI Control": "KSI-SVC-06"
+    },
+    {
+        "Ticket ID": "815",
+        "Summary": "KSI-SVC-08 Prevent Residual Risk",
+        "KSI Control": "KSI-SVC-08"
+    },
+    {
+        "Ticket ID": "817",
+        "Summary": "KSI-SVC-09 Communication Integrity",
+        "KSI Control": "KSI-SVC-09"
+    },
+    {
+        "Ticket ID": "819",
+        "Summary": "KSI-SVC-10 Unwanted Data Removal",
+        "KSI Control": "KSI-SVC-10"
+    },
+    {
+        "Ticket ID": "821",
+        "Summary": "KSI-TPR-03 Supply Chain Risk Management",
+        "KSI Control": "KSI-TPR-03"
+    },
+    {
+        "Ticket ID": "823",
+        "Summary": "KSI-TPR-04 Supply Chain Risk Monitoring",
+        "KSI Control": "KSI-TPR-04"
+    }
+]
